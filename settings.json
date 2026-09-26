@@ -1,0 +1,62 @@
+{
+  "inventor_api": {
+    "hole_direction": {
+      "positive": 20993,
+      "negative": 20994
+    },
+    "dimension_orientation": {
+      "horizontal": 19201,
+      "vertical": 19202,
+      "aligned": 19203
+    }
+  },
+  "confirmat": {
+    "debug": false,
+    "outer": {
+      "diameter": "5 mm",
+      "depth": "20 mm"
+    },
+    "inner": {
+      "diameter": "3 mm",
+      "depth": "35 mm"
+    }
+  },
+  "stiajka": {
+    "parameters": {
+      "diameter": "Стяжка_D",
+      "depth": "Стяжка_h",
+      "offset": "Стяжка_отступ"
+    },
+    "side_offset": 3.4,
+    "outer_main": {
+      "diameter": "Стяжка_D_телаШтока",
+      "depth": "Стяжка_отступ",
+      "direction": "positive",
+      "feature_name": "Stiajka outer 8x34"
+    },
+    "outer_secondary": {
+      "diameter": "Стяжка_D_резьбыШтока",
+      "depth": "Стяжка_резьбыШтока_Петля_h",
+      "direction": "negative",
+      "feature_name": "Stiajka outer 5x13"
+    },
+    "inner_short": {
+      "diameter": "Шкант_D",
+      "depth": "Шкант_глубина_в_пласть",
+      "direction": "negative",
+      "feature_name": "Shkant 8x10"
+    },
+    "inner_long": {
+      "diameter": "Шкант_D",
+      "depth": "Шкант_глубина_в_торец",
+      "direction": "positive",
+      "feature_name": "Shkant 8x20"
+    },
+    "cup": {
+      "diameter_parameter": "Стяжка_D",
+      "depth_parameter": "Стяжка_h",
+      "direction": "positive",
+      "feature_name": "Stiajka cup"
+    }
+  }
+}
