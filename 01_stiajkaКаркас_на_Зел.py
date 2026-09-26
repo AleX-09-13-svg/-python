@@ -10,7 +10,7 @@ def main():
     green_faces_before = get_green_faces(comp)
     sketches = find_stiajka_sketches_on_green_faces(comp)
     print("Green stiajka sketches found:", len(sketches))
-    created = create_stiajka_features(doc, sketches)
+    created = create_stiajka_features(doc, sketches, green_faces_before)
     green_faces_after = get_green_faces(comp)
     reset_count = reset_faces_to_feature_appearance(
         green_faces_before + green_faces_after,

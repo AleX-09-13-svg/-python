@@ -7,12 +7,8 @@ from common.constants import (
     EDGE_OFFSET_FRAME_PARAM,
 )
 from common.face_utils import (
-    get_blue_faces,
-    get_drilling_faces,
-    get_red_faces,
-    get_yellow_faces,
+    collect_colored_faces,
     group_faces_by_plane_and_appearance,
-    is_green,
     set_sketch_color_from_face,
     sketch_on_face_plane_with_color,
 )
@@ -59,15 +55,6 @@ def unique_sketch_name(sketches, base):
             name = f"{base}_{index}"
         except Exception:
             return name
-
-
-def green_face_count(component_definition):
-    return sum(
-        1
-        for body in component_definition.SurfaceBodies
-        for face in body.Faces
-        if is_green(face)
-    )
 
 
 def create_sketches_for_faces(
@@ -124,9 +111,11 @@ def create_sketches_for_faces(
                 comp,
                 edge_offset_param,
             ):
-                set_sketch_color_from_face(sketch, face, inv.TransientObjects)
                 hide_sketch_dimensions(sketch)
                 count += 1
+
+        set_sketch_color_from_face(sketch, group[0], inv.TransientObjects)
+        hide_sketch_dimensions(sketch)
 
     print(f"{sketch_label} faces processed:", count)
     print(f"{sketch_label} sketches created:", created_sketches)
@@ -145,12 +134,13 @@ def main():
     ):
         return
 
-    drilling_faces = get_drilling_faces(comp)
-    blue_faces = get_blue_faces(comp)
+    colored_faces = collect_colored_faces(comp)
+    drilling_faces = colored_faces["drilling"]
+    blue_faces = colored_faces["blue"]
 
-    print("Red faces:", len(get_red_faces(comp)))
-    print("Green faces:", green_face_count(comp))
-    print("Yellow faces:", len(get_yellow_faces(comp)))
+    print("Red faces:", len(colored_faces["red"]))
+    print("Green faces:", len(colored_faces["green"]))
+    print("Yellow faces:", len(colored_faces["yellow"]))
     print("Drilling faces:", len(drilling_faces))
 
     create_sketches_for_faces(

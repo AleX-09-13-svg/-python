@@ -381,6 +381,34 @@ def get_drilling_faces(comp):
     ]
 
 
+def collect_colored_faces(comp):
+    faces = {
+        "red": [],
+        "green": [],
+        "yellow": [],
+        "blue": [],
+    }
+
+    for body in comp.SurfaceBodies:
+        for face in body.Faces:
+            try:
+                text = appearance_text(face)
+            except Exception:
+                continue
+
+            if "red" in text or "\u043a\u0440\u0430\u0441" in text:
+                faces["red"].append(face)
+            if "green" in text or "\u0437\u0435\u043b\u0435\u043d" in text or "\u0437\u0435\u043b\u0451\u043d" in text:
+                faces["green"].append(face)
+            if "yellow" in text or "\u0436\u0435\u043b\u0442" in text or "\u0436\u0451\u043b\u0442" in text:
+                faces["yellow"].append(face)
+            if "blue" in text or "\u0441\u0438\u043d" in text or "\u0433\u043e\u043b\u0443\u0431" in text:
+                faces["blue"].append(face)
+
+    faces["drilling"] = faces["red"] + faces["green"] + faces["yellow"]
+    return faces
+
+
 def group_faces_by_plane(faces):
     groups = []
 
@@ -402,10 +430,10 @@ def group_faces_by_plane_and_appearance(faces):
         key = appearance_key(face)
 
         for group in groups:
-            if appearance_key(group[0]) == key and same_plane(group[0], face):
-                group.append(face)
+            if group["key"] == key and same_plane(group["faces"][0], face):
+                group["faces"].append(face)
                 break
         else:
-            groups.append([face])
+            groups.append({"key": key, "faces": [face]})
 
-    return groups
+    return [group["faces"] for group in groups]

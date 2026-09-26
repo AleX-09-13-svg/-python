@@ -13,7 +13,6 @@ from confirmat.confirmat import (
     unique_points,
 )
 
-
 def stiajka_setting(*keys, default=None):
     return setting("stiajka", *keys, default=default)
 
@@ -134,8 +133,15 @@ def point_inside_model_bounds(point, bounds, tol=0.01):
     )
 
 
+def planar_geometry(entity):
+    try:
+        return entity.Geometry
+    except Exception:
+        return entity.Plane
+
+
 def project_point_to_face_plane(tg, point, face):
-    geometry = face.Geometry
+    geometry = planar_geometry(face)
     normal = geometry.Normal
     root = geometry.RootPoint
     distance = (
@@ -150,25 +156,25 @@ def project_point_to_face_plane(tg, point, face):
     )
 
 
-def side_hole_model_points(drawer_sketch, blue_face, outer_points, tg, side_offset):
-    blue_normal = blue_face.Geometry.Normal
+def side_hole_model_points(drawer_sketch, colored_face, outer_points, tg, side_offset):
+    face_normal = colored_face.Geometry.Normal
     model_points = []
 
     for sketch_point in outer_points:
         point = drawer_sketch.SketchToModelSpace(sketch_point.Geometry)
         model_points.append(
             tg.CreatePoint(
-                point.X - blue_normal.X * side_offset,
-                point.Y - blue_normal.Y * side_offset,
-                point.Z - blue_normal.Z * side_offset,
+                point.X - face_normal.X * side_offset,
+                point.Y - face_normal.Y * side_offset,
+                point.Z - face_normal.Z * side_offset,
             )
         )
 
     return model_points
 
 
-def candidate_side_faces(component_definition, blue_face):
-    x1, x2, y1, y2, z1, z2 = face_model_bounds(blue_face)
+def candidate_side_faces(component_definition, colored_face):
+    x1, x2, y1, y2, z1, z2 = face_model_bounds(colored_face)
     target_y = min(y1, y2)
     faces = []
 
@@ -191,8 +197,8 @@ def candidate_side_faces(component_definition, blue_face):
     return faces
 
 
-def find_side_face(component_definition, blue_face, model_points, tg):
-    for face in candidate_side_faces(component_definition, blue_face):
+def find_side_face(component_definition, colored_face, model_points, tg):
+    for face in candidate_side_faces(component_definition, colored_face):
         try:
             bounds = face_model_bounds(face)
             projected = [
@@ -297,6 +303,41 @@ def side_face_bounds_in_sketch(sketch, face):
     return min(xs), max(xs), min(ys), max(ys)
 
 
+def point_inside_sketch_bounds(x, y, bounds, tol=0.01):
+    x1, x2, y1, y2 = bounds
+    return x1 - tol <= x <= x2 + tol and y1 - tol <= y <= y2 + tol
+
+
+def faces_on_sketch_plane(sketch, faces):
+    try:
+        sketch_plane = sketch.PlanarEntity
+    except Exception:
+        return []
+
+    result = []
+    for face in faces:
+        try:
+            if same_plane_entity(sketch_plane, face):
+                result.append(face)
+        except Exception:
+            continue
+
+    return result
+
+
+def colored_face_for_axis(sketch, axis_data, faces):
+    for face in faces:
+        try:
+            bounds = side_face_bounds_in_sketch(sketch, face)
+        except Exception:
+            continue
+
+        if point_inside_sketch_bounds(axis_data["mid_x"], axis_data["mid_y"], bounds):
+            return face
+
+    return None
+
+
 def line_midpoint_xy(line):
     start = line.StartSketchPoint.Geometry
     end = line.EndSketchPoint.Geometry
@@ -378,11 +419,64 @@ def add_cup_distance_dimension(sketch, tg, cup_points, distance_expression):
     )
 
 
+def edge_length2(edge):
+    try:
+        p1 = edge.StartVertex.Point
+        p2 = edge.StopVertex.Point
+    except Exception:
+        p1 = edge.Vertices.Item(1).Point
+        p2 = edge.Vertices.Item(2).Point
+
+    dx = p2.X - p1.X
+    dy = p2.Y - p1.Y
+    dz = p2.Z - p1.Z
+    return dx * dx + dy * dy + dz * dz
+
+
+def shortest_face_edge(face):
+    edges = []
+
+    for index in range(1, face.Edges.Count + 1):
+        try:
+            edges.append(face.Edges.Item(index))
+        except Exception:
+            continue
+
+    if not edges:
+        return None
+
+    return min(edges, key=edge_length2)
+
+
+def create_perpendicular_side_work_plane(component_definition, colored_face):
+    short_edge = shortest_face_edge(colored_face)
+    if short_edge is None:
+        return None
+
+    try:
+        work_plane = component_definition.WorkPlanes.AddByLinePlaneAndAngle(
+            short_edge,
+            colored_face,
+            "90 deg",
+            True,
+        )
+    except Exception as exc:
+        print("  side work plane failed:", exc)
+        return None
+
+    try:
+        work_plane.Visible = False
+    except Exception:
+        pass
+
+    return work_plane
+
+
 def create_side_sketch(
     component_definition,
     inv,
     drawer_sketch,
-    blue_face,
+    colored_face,
     outer_points,
     outer_hole_feature,
 ):
@@ -393,14 +487,14 @@ def create_side_sketch(
     )
     model_points = side_hole_model_points(
         drawer_sketch,
-        blue_face,
+        colored_face,
         outer_points,
         inv.TransientGeometry,
         side_offset,
     )
     side_face = find_side_face(
         component_definition,
-        blue_face,
+        colored_face,
         model_points,
         inv.TransientGeometry,
     )
@@ -408,13 +502,17 @@ def create_side_sketch(
     if side_face is None:
         return None, []
 
-    sketch = component_definition.Sketches.Add(side_face)
+    sketch_plane = create_perpendicular_side_work_plane(component_definition, colored_face)
+    if sketch_plane is None:
+        sketch_plane = side_face
+
+    sketch = component_definition.Sketches.Add(sketch_plane)
     sketch.Name = unique_sketch_name(component_definition.Sketches, "StiajkaSideSketch")
     projected_lines = project_hole_end_lines(sketch, outer_hole_feature)
 
     sketch_coords = [
         sketch.ModelToSketchSpace(
-            project_point_to_face_plane(inv.TransientGeometry, model_point, side_face)
+            project_point_to_face_plane(inv.TransientGeometry, model_point, sketch_plane)
         )
         for model_point in model_points
     ]
@@ -457,11 +555,13 @@ def create_side_sketch(
     return sketch, sketch_points
 
 
-def create_stiajka_features(part_document, sketches=None):
+def create_stiajka_features(part_document, sketches=None, colored_faces=None):
     inv = part_document.Parent
     component_definition = part_document.ComponentDefinition
     if sketches is None:
         sketches = find_stiajka_sketches(component_definition)
+    if colored_faces is None:
+        colored_faces = get_blue_faces(component_definition)
     created = 0
 
     missing = missing_parameters(
@@ -483,15 +583,27 @@ def create_stiajka_features(part_document, sketches=None):
     for sketch in sketches:
         print("Sketch:", sketch.Name)
         try:
-            blue_face = sketch.PlanarEntity
+            sketch_face = sketch.PlanarEntity
         except Exception as exc:
             print("  skipped, no planar face:", exc)
             continue
+
+        sketch_colored_faces = faces_on_sketch_plane(sketch, colored_faces)
+        print("  colored faces on sketch plane:", len(sketch_colored_faces))
 
         axes = construction_axes_data(sketch, sketch_points_data(sketch))
         print("  construction axes:", len(axes))
 
         for axis in axes:
+            axis_colored_face = colored_face_for_axis(
+                sketch,
+                axis,
+                sketch_colored_faces,
+            )
+            if axis_colored_face is None:
+                axis_colored_face = sketch_face
+                print("  axis colored face not found, using sketch plane")
+
             outer_points, inner_points = axis_stiajka_points(axis)
             outer_points = unique_points(outer_points)
             inner_points = unique_points(inner_points)
@@ -572,7 +684,7 @@ def create_stiajka_features(part_document, sketches=None):
                 component_definition,
                 inv,
                 sketch,
-                blue_face,
+                axis_colored_face,
                 outer_points,
                 outer_hole_feature,
             )
