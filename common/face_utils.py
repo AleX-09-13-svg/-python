@@ -165,18 +165,18 @@ def sketch_color_matches_face(sketch, face):
         return False
 
 
-def set_sketch_color_from_face(sketch, face, transient_objects=None):
+def set_sketch_color_from_face(sketch, face, transient_objects=None, include_entities=True):
     rgb = face_color_rgb(face)
     color = create_rgb_color(rgb, transient_objects) or face_color(face)
-    return set_sketch_color(sketch, color, transient_objects)
+    return set_sketch_color(sketch, color, transient_objects, include_entities)
 
 
-def set_sketch_color_rgb(sketch, rgb, transient_objects=None):
+def set_sketch_color_rgb(sketch, rgb, transient_objects=None, include_entities=True):
     color = create_rgb_color(rgb, transient_objects)
-    return set_sketch_color(sketch, color, transient_objects)
+    return set_sketch_color(sketch, color, transient_objects, include_entities)
 
 
-def set_sketch_color(sketch, color, transient_objects=None):
+def set_sketch_color(sketch, color, transient_objects=None, include_entities=True):
     if color is None:
         return False
 
@@ -189,6 +189,9 @@ def set_sketch_color(sketch, color, transient_objects=None):
         pass
     else:
         changed = True
+
+    if not include_entities:
+        return changed
 
     for collection_name in ("SketchLines", "SketchCircles", "SketchArcs", "SketchEllipses"):
         try:

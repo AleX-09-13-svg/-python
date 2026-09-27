@@ -1,4 +1,5 @@
 import ctypes
+from time import perf_counter
 
 from common.constants import DRAWER_SKETCH_PREFIX, DRILLING_SKETCH_PREFIX, POINT_DISTANCE_PARAM
 from common.face_utils import get_blue_faces, get_green_faces, reset_faces_to_feature_appearance
@@ -9,6 +10,7 @@ from confirmat.confirmat import same_plane_entity
 from confirmat.confirmat import (
     add_holes,
     construction_axes_data,
+    face_bounds_cache,
     sketch_points_data,
     unique_points,
 )
@@ -32,6 +34,64 @@ def stiajka_hole(name):
 def stiajka_direction(hole_settings):
     direction_name = hole_settings.get("direction", "positive")
     return hole_direction(direction_name)
+
+
+def opposite_hole_direction(direction):
+    positive = hole_direction("positive")
+    negative = hole_direction("negative")
+
+    if direction == positive:
+        return negative
+    if direction == negative:
+        return positive
+
+    return direction
+
+
+def log_elapsed(label, started):
+    elapsed = perf_counter() - started
+    print(f"  {label}: {elapsed:.2f}s", flush=True)
+    return perf_counter()
+
+
+def solve_sketch(sketch):
+    for method_name in ("Solve", "Update"):
+        try:
+            getattr(sketch, method_name)()
+            print(f"  side sketch {method_name.lower()} ok")
+            return True
+        except Exception:
+            continue
+
+    return False
+
+
+def fix_sketch_entity(sketch, entity):
+    try:
+        sketch.GeometricConstraints.AddGround(entity)
+        return True
+    except Exception:
+        pass
+
+    for attr in ("Grounded", "Fixed"):
+        try:
+            setattr(entity, attr, True)
+            return True
+        except Exception:
+            continue
+
+    return False
+
+
+def fix_sketch_points(sketch, points):
+    fixed = 0
+
+    for point in points:
+        if fix_sketch_entity(sketch, point):
+            fixed += 1
+
+    print(f"  side sketch fixed points: {fixed}/{len(points)}")
+    return fixed
 
 
 def show_message(title, text):
@@ -185,6 +245,62 @@ def side_hole_model_points(drawer_sketch, colored_face, outer_points, tg, side_o
     return model_points
 
 
+def sketch_points_to_model(sketch, points):
+    return [sketch.SketchToModelSpace(point.Geometry) for point in points]
+
+
+def offset_points_from_face(tg, face, points, offset):
+    normal = face.Geometry.Normal
+    return [
+        tg.CreatePoint(
+            point.X - normal.X * offset,
+            point.Y - normal.Y * offset,
+            point.Z - normal.Z * offset,
+        )
+        for point in points
+    ]
+
+
+def face_key(face):
+    try:
+        return bytes(face.ReferenceKey)
+    except Exception:
+        return id(face)
+
+
+def adjacent_faces(face):
+    faces = []
+    seen = {face_key(face)}
+
+    try:
+        edges = face.Edges
+        edge_count = edges.Count
+    except Exception:
+        return faces
+
+    for edge_index in range(1, edge_count + 1):
+        try:
+            edge_faces = edges.Item(edge_index).Faces
+            face_count = edge_faces.Count
+        except Exception:
+            continue
+
+        for face_index in range(1, face_count + 1):
+            try:
+                candidate = edge_faces.Item(face_index)
+                key = face_key(candidate)
+            except Exception:
+                continue
+
+            if key in seen:
+                continue
+
+            seen.add(key)
+            faces.append(candidate)
+
+    return faces
+
+
 def candidate_side_faces(component_definition, colored_face):
     x1, x2, y1, y2, z1, z2 = face_model_bounds(colored_face)
     target_y = min(y1, y2)
@@ -209,24 +325,57 @@ def candidate_side_faces(component_definition, colored_face):
     return faces
 
 
-def find_side_face(component_definition, colored_face, model_points, tg):
-    for face in candidate_side_faces(component_definition, colored_face):
+def best_side_face(candidates, model_points, tg):
+    best = None
+    best_score = None
+
+    for face in candidates:
         try:
             bounds = face_model_bounds(face)
             projected = [
-                project_point_to_face_plane(
-                    tg,
-                    point,
-                    face,
-                )
+                project_point_to_face_plane(tg, point, face)
                 for point in model_points
             ]
-            if all(point_inside_model_bounds(point, bounds) for point in projected):
-                return face
+            misses = sum(
+                not point_inside_model_bounds(point, bounds)
+                for point in projected
+            )
+            normal = face.Geometry.Normal
+            score = (
+                misses,
+                -abs(normal.Y),
+                sum(
+                    abs((point.X - bounds[0]) * (point.X - bounds[1]))
+                    + abs((point.Y - bounds[2]) * (point.Y - bounds[3]))
+                    + abs((point.Z - bounds[4]) * (point.Z - bounds[5]))
+                    for point in projected
+                ),
+            )
         except Exception:
             continue
 
-    return None
+        if misses == 0:
+            return face
+
+        if best_score is None or score < best_score:
+            best_score = score
+            best = face
+
+    return best
+
+
+def find_side_face(component_definition, colored_face, model_points, tg):
+    started = perf_counter()
+    candidates = adjacent_faces(colored_face)
+    face = best_side_face(candidates, model_points, tg)
+    if face is not None:
+        log_elapsed(f"side face adjacent search ({len(candidates)} candidates)", started)
+        return face
+
+    candidates = candidate_side_faces(component_definition, colored_face)
+    face = best_side_face(candidates, model_points, tg)
+    log_elapsed(f"side face fallback search ({len(candidates)} candidates)", started)
+    return face
 
 
 def point_distance_parameter_name(sketch):
@@ -445,6 +594,146 @@ def edge_length2(edge):
     return dx * dx + dy * dy + dz * dz
 
 
+def edge_end_points(edge):
+    try:
+        return edge.StartVertex.Point, edge.StopVertex.Point
+    except Exception:
+        return edge.Vertices.Item(1).Point, edge.Vertices.Item(2).Point
+
+
+def point_to_edge_distance2(point, edge):
+    start, end = edge_end_points(edge)
+    return point_to_segment_distance2(point, start, end)
+
+
+def point_to_segment_distance2(point, start, end):
+    dx = end.X - start.X
+    dy = end.Y - start.Y
+    dz = end.Z - start.Z
+    length2 = dx * dx + dy * dy + dz * dz
+
+    if length2 == 0:
+        return (
+            (point.X - start.X) ** 2
+            + (point.Y - start.Y) ** 2
+            + (point.Z - start.Z) ** 2
+        )
+
+    t = (
+        (point.X - start.X) * dx
+        + (point.Y - start.Y) * dy
+        + (point.Z - start.Z) * dz
+    ) / length2
+    t = max(0, min(1, t))
+
+    x = start.X + dx * t
+    y = start.Y + dy * t
+    z = start.Z + dz * t
+    return (point.X - x) ** 2 + (point.Y - y) ** 2 + (point.Z - z) ** 2
+
+
+def edge_average_z(edge):
+    start, end = edge_end_points(edge)
+    return (start.Z + end.Z) / 2
+
+
+def model_points_center(tg, points):
+    count = len(points)
+    return tg.CreatePoint(
+        sum(point.X for point in points) / count,
+        sum(point.Y for point in points) / count,
+        sum(point.Z for point in points) / count,
+    )
+
+
+def point_key(point):
+    return round(point.X, 5), round(point.Y, 5), round(point.Z, 5)
+
+
+def model_distance2(point1, point2):
+    return (
+        (point1.X - point2.X) ** 2
+        + (point1.Y - point2.Y) ** 2
+        + (point1.Z - point2.Z) ** 2
+    )
+
+
+def geometry_center(geometry):
+    for attr in ("Center", "CenterPoint", "BasePoint", "Origin"):
+        try:
+            point = getattr(geometry, attr)
+            if all(hasattr(point, name) for name in ("X", "Y", "Z")):
+                return point
+        except Exception:
+            continue
+
+    return None
+
+
+def hole_feature_center_candidates(hole_feature):
+    candidates = []
+    seen = set()
+
+    try:
+        faces = hole_feature.Faces
+        face_count = faces.Count
+    except Exception:
+        return candidates
+
+    for face_index in range(1, face_count + 1):
+        try:
+            face = faces.Item(face_index)
+            edges = face.Edges
+            edge_count = edges.Count
+        except Exception:
+            continue
+
+        for edge_index in range(1, edge_count + 1):
+            try:
+                center = geometry_center(edges.Item(edge_index).Geometry)
+            except Exception:
+                center = None
+
+            if center is None:
+                continue
+
+            key = point_key(center)
+            if key in seen:
+                continue
+
+            seen.add(key)
+            candidates.append(center)
+
+    return candidates
+
+
+def projected_hole_centers(hole_feature, reference_points):
+    candidates = hole_feature_center_candidates(hole_feature)
+    points = []
+    used = set()
+
+    for reference in reference_points:
+        best_index = None
+        best_distance = None
+
+        for index, candidate in enumerate(candidates):
+            if index in used:
+                continue
+
+            distance2 = model_distance2(reference, candidate)
+            if best_distance is None or distance2 < best_distance:
+                best_distance = distance2
+                best_index = index
+
+        if best_index is None:
+            continue
+
+        used.add(best_index)
+        points.append(candidates[best_index])
+
+    return points
+
+
 def shortest_face_edge(face):
     edges = []
 
@@ -460,28 +749,239 @@ def shortest_face_edge(face):
     return min(edges, key=edge_length2)
 
 
-def create_perpendicular_side_work_plane(component_definition, colored_face):
-    short_edge = shortest_face_edge(colored_face)
-    if short_edge is None:
+def side_plane_edge(colored_face, model_points, tg):
+    edge_data = []
+
+    for index in range(1, colored_face.Edges.Count + 1):
+        try:
+            edge = colored_face.Edges.Item(index)
+            start, end = edge_end_points(edge)
+            dx = end.X - start.X
+            dy = end.Y - start.Y
+            dz = end.Z - start.Z
+            edge_data.append(
+                {
+                    "edge": edge,
+                    "start": start,
+                    "end": end,
+                    "length2": dx * dx + dy * dy + dz * dz,
+                    "z": (start.Z + end.Z) / 2,
+                }
+            )
+        except Exception:
+            continue
+
+    if not edge_data:
         return None
+
+    max_length2 = max(data["length2"] for data in edge_data)
+    long_edges = [data for data in edge_data if data["length2"] >= max_length2 * 0.95]
+    min_z = min(data["z"] for data in long_edges)
+    lower_edges = [data for data in long_edges if abs(data["z"] - min_z) <= 0.001]
+    reference = model_points_center(tg, model_points)
+    data = min(
+        lower_edges,
+        key=lambda item: point_to_segment_distance2(
+            reference,
+            item["start"],
+            item["end"],
+        ),
+    )
+    print(f"  side plane lower edge z: {data['z']:.4f}")
+    return data["edge"]
+
+
+def face_average_z(face):
+    x1, x2, y1, y2, z1, z2 = face_model_bounds(face)
+    return (z1 + z2) / 2
+
+
+def face_normal_z_score(face):
+    try:
+        return abs(face.Geometry.Normal.Z)
+    except Exception:
+        return 0
+
+
+def lower_adjacent_face(colored_face, model_points, tg):
+    candidates = adjacent_faces(colored_face)
+    if not candidates:
+        return None
+
+    horizontal = [
+        face
+        for face in candidates
+        if face_normal_z_score(face) >= 0.9
+    ]
+    candidates = horizontal or candidates
+    reference = model_points_center(tg, model_points)
+
+    def score(face):
+        try:
+            projected = project_point_to_face_plane(tg, reference, face)
+            bounds = face_model_bounds(face)
+            outside = not point_inside_model_bounds(projected, bounds, tol=0.1)
+            return outside, face_average_z(face), model_distance2(reference, projected)
+        except Exception:
+            return True, 1e9, 1e9
+
+    face = min(candidates, key=score)
+    print(f"  side lower face z: {face_average_z(face):.4f}")
+    return face
+
+
+def lower_face_from_edge(edge, colored_face):
+    candidates = []
+
+    try:
+        faces = edge.Faces
+        face_count = faces.Count
+    except Exception:
+        return None
+
+    for index in range(1, face_count + 1):
+        try:
+            face = faces.Item(index)
+        except Exception:
+            continue
+
+        candidates.append(face)
+
+    if not candidates:
+        return None
+
+    horizontal = [
+        face
+        for face in candidates
+        if face_normal_z_score(face) >= 0.9
+    ]
+    face = min(horizontal or candidates, key=face_average_z)
+    print(f"  side lower edge face z: {face_average_z(face):.4f}")
+    return face
+
+
+def create_perpendicular_side_work_plane(
+    component_definition,
+    colored_face,
+    model_points,
+    tg,
+):
+    started = perf_counter()
+    edge = side_plane_edge(colored_face, model_points, tg)
+    started = log_elapsed("side edge select elapsed", started)
+    if edge is None:
+        return None, None
+
+    face = lower_face_from_edge(edge, colored_face)
+    started = log_elapsed("side edge face elapsed", started)
+    if face is None:
+        face = lower_adjacent_face(colored_face, model_points, tg)
+        log_elapsed("side adjacent face elapsed", started)
+    if face is not None:
+        return face, edge
 
     try:
         work_plane = component_definition.WorkPlanes.AddByLinePlaneAndAngle(
-            short_edge,
+            edge,
             colored_face,
             "90 deg",
             True,
         )
     except Exception as exc:
         print("  side work plane failed:", exc)
-        return None
+        return None, None
 
     try:
         work_plane.Visible = False
     except Exception:
         pass
 
-    return work_plane
+    return work_plane, edge
+
+
+def closest_point_on_sketch_line(tg, point, line):
+    start = line.StartSketchPoint.Geometry
+    end = line.EndSketchPoint.Geometry
+    dx = end.X - start.X
+    dy = end.Y - start.Y
+    length2 = dx * dx + dy * dy
+
+    if length2 == 0:
+        return tg.CreatePoint2d(start.X, start.Y)
+
+    t = ((point.X - start.X) * dx + (point.Y - start.Y) * dy) / length2
+    return tg.CreatePoint2d(start.X + dx * t, start.Y + dy * t)
+
+
+def add_offset_dimensions_from_edge(sketch, tg, edge, points, projected_center_points):
+    if edge is None:
+        return 0
+
+    try:
+        projected = sketch.AddByProjectingEntity(edge)
+        projected.Construction = True
+    except Exception as exc:
+        print("  side offset edge projection failed:", exc)
+        return 0
+
+    created = 0
+    zero_created = 0
+    offset_expression = stiajka_parameter("offset", "\u0421\u0442\u044f\u0436\u043a\u0430_\u043e\u0442\u0441\u0442\u0443\u043f")
+
+    for point, projected_center in zip(points, projected_center_points):
+        try:
+            point_geo = point.Geometry
+            foot = closest_point_on_sketch_line(tg, point_geo, projected)
+            helper = sketch.SketchLines.AddByTwoPoints(foot, point)
+            helper.Construction = True
+            sketch.GeometricConstraints.AddPerpendicular(helper, projected)
+            try:
+                sketch.GeometricConstraints.AddCoincident(
+                    helper.StartSketchPoint,
+                    projected,
+                )
+            except Exception:
+                pass
+
+            dimension = sketch.DimensionConstraints.AddTwoPointDistance(
+                helper.StartSketchPoint,
+                helper.EndSketchPoint,
+                stiajka_dimension("aligned"),
+                tg.CreatePoint2d(
+                    (foot.X + point_geo.X) / 2,
+                    (foot.Y + point_geo.Y) / 2,
+                ),
+                False,
+            )
+            dimension.Parameter.Expression = offset_expression
+            created += 1
+
+            try:
+                zero_dimension = sketch.DimensionConstraints.AddTwoPointDistance(
+                    projected_center,
+                    helper.StartSketchPoint,
+                    stiajka_dimension("aligned"),
+                    tg.CreatePoint2d(foot.X - 1, foot.Y),
+                    False,
+                )
+                zero_dimension.Parameter.Expression = "0 mm"
+                zero_created += 1
+            except Exception as exc:
+                print("  side zero dimension failed:", exc)
+        except Exception as exc:
+            print("  side offset dimension failed:", exc)
+
+    print(f"  side offset dimensions: {created}/{len(points)}")
+    print(f"  side zero dimensions: {zero_created}/{len(points)}")
+    return created
+
+
+def add_projected_center_point(sketch, center_coord, source_point):
+    try:
+        projected = sketch.AddByProjectingEntity(source_point)
+        return projected
+    except Exception:
+        return sketch.SketchPoints.Add(center_coord, False)
 
 
 def create_side_sketch(
@@ -490,84 +990,193 @@ def create_side_sketch(
     drawer_sketch,
     colored_face,
     outer_points,
-    outer_hole_feature,
+    outer_hole_feature=None,
+    plane_mode="edge",
 ):
     side_offset = get_parameter_value(
         component_definition.Parameters,
         stiajka_parameter("offset", "\u0421\u0442\u044f\u0436\u043a\u0430_\u043e\u0442\u0441\u0442\u0443\u043f"),
         stiajka_setting("side_offset", default=3.4),
     )
-    model_points = side_hole_model_points(
-        drawer_sketch,
-        colored_face,
-        outer_points,
+    center_points = sketch_points_to_model(drawer_sketch, outer_points)
+    model_points = offset_points_from_face(
         inv.TransientGeometry,
+        colored_face,
+        center_points,
         side_offset,
     )
-    side_face = find_side_face(
-        component_definition,
-        colored_face,
-        model_points,
-        inv.TransientGeometry,
-    )
+    print(f"  using outer sketch centers offset by {side_offset} cm")
+    side_started = perf_counter()
+    side_edge = None
 
-    if side_face is None:
-        return None, []
+    if plane_mode == "face":
+        sketch_plane = find_side_face(
+            component_definition,
+            colored_face,
+            model_points,
+            inv.TransientGeometry,
+        )
+    else:
+        sketch_plane, side_edge = create_perpendicular_side_work_plane(
+            component_definition,
+            colored_face,
+            model_points,
+            inv.TransientGeometry,
+        )
 
-    sketch_plane = create_perpendicular_side_work_plane(component_definition, colored_face)
+    side_started = log_elapsed("side plane elapsed", side_started)
     if sketch_plane is None:
-        sketch_plane = side_face
+        return None, []
 
     sketch = component_definition.Sketches.Add(sketch_plane)
     sketch.Name = unique_sketch_name(component_definition.Sketches, "StiajkaSideSketch")
-    projected_lines = project_hole_end_lines(sketch, outer_hole_feature)
+    defer_updates = False
+    try:
+        sketch.DeferUpdates = True
+        defer_updates = True
+    except Exception:
+        pass
 
-    sketch_coords = [
-        sketch.ModelToSketchSpace(
-            project_point_to_face_plane(inv.TransientGeometry, model_point, sketch_plane)
-        )
-        for model_point in model_points
-    ]
-    sketch_points = []
-    for sketch_coord in sketch_coords:
-        projected_line = nearest_line(projected_lines, sketch_coord)
-        if projected_line is not None:
-            mid_x, mid_y = line_midpoint_xy(projected_line)
-            sketch_point = sketch.SketchPoints.Add(
-                inv.TransientGeometry.CreatePoint2d(mid_x, mid_y),
-                True,
+    try:
+        side_started = perf_counter()
+        sketch_coords = [
+            sketch.ModelToSketchSpace(
+                project_point_to_face_plane(inv.TransientGeometry, model_point, sketch_plane)
             )
-            sketch.GeometricConstraints.AddMidpoint(sketch_point, projected_line)
-        else:
+            for model_point in model_points
+        ]
+        center_coords = [
+            sketch.ModelToSketchSpace(
+                project_point_to_face_plane(inv.TransientGeometry, center_point, sketch_plane)
+            )
+            for center_point in center_points
+        ]
+        side_started = log_elapsed("side point projection elapsed", side_started)
+
+        side_started = perf_counter()
+        projected_center_points = [
+            add_projected_center_point(sketch, center_coord, source_point)
+            for center_coord, source_point in zip(center_coords, outer_points)
+        ]
+        sketch_points = []
+        for sketch_coord in sketch_coords:
             sketch_point = sketch.SketchPoints.Add(sketch_coord, True)
+            sketch_point.HoleCenter = True
+            sketch_points.append(sketch_point)
+        side_started = log_elapsed("side point creation elapsed", side_started)
 
-        sketch_point.HoleCenter = True
-        sketch_points.append(sketch_point)
-
-    if not projected_lines:
-        x1, x2, y1, y2 = side_face_bounds_in_sketch(sketch, side_face)
-        reference_x = sketch_coords[0].X - side_offset
-        if abs(reference_x - x2) < abs(reference_x - x1):
-            reference_x = x2
-        else:
-            reference_x = x1
-
-        base_line = sketch.SketchLines.AddByTwoPoints(
-            inv.TransientGeometry.CreatePoint2d(reference_x, y2),
-            inv.TransientGeometry.CreatePoint2d(reference_x, y1),
-        )
-        add_side_sketch_dimensions(
+        side_started = perf_counter()
+        if add_offset_dimensions_from_edge(
             sketch,
             inv.TransientGeometry,
-            base_line,
+            side_edge,
             sketch_points,
-            point_distance_parameter_name(drawer_sketch),
+            projected_center_points,
+        ) != len(sketch_points):
+            fix_sketch_points(sketch, sketch_points)
+        log_elapsed("side dimensions elapsed", side_started)
+        return sketch, sketch_points
+
+    finally:
+        if defer_updates:
+            try:
+                side_started = perf_counter()
+                sketch.DeferUpdates = False
+                log_elapsed("side defer update elapsed", side_started)
+            except Exception:
+                pass
+
+
+def create_cup_holes(component_definition, inv, side_points):
+    cup = stiajka_hole("cup")
+    direction = stiajka_direction(cup)
+    return add_holes(
+        component_definition,
+        inv,
+        side_points,
+        cup.get(
+            "diameter_parameter",
+            stiajka_parameter("diameter", "\u0421\u0442\u044f\u0436\u043a\u0430_D"),
+        ),
+        cup.get(
+            "depth_parameter",
+            stiajka_parameter("depth", "\u0421\u0442\u044f\u0436\u043a\u0430_h"),
+        ),
+        direction,
+        cup.get("feature_name", "Stiajka cup"),
+    )
+
+
+def create_hole_batch(
+    component_definition,
+    inv,
+    jobs,
+    points_key,
+    settings_key,
+    default_diameter,
+    default_depth,
+    default_name,
+    label,
+    success_key=None,
+):
+    settings = stiajka_hole(settings_key)
+    points = unique_points(
+        point
+        for job in jobs
+        for point in job[points_key]
+    )
+    if not points:
+        return 0
+
+    started = perf_counter()
+    try:
+        add_holes(
+            component_definition,
+            inv,
+            points,
+            settings.get("diameter", default_diameter),
+            settings.get("depth", default_depth),
+            stiajka_direction(settings),
+            settings.get("feature_name", default_name),
         )
+        if success_key:
+            for job in jobs:
+                job[success_key] = True
+        print(f"  created {label} batch, points={len(points)}")
+        log_elapsed(f"{label} batch elapsed", started)
+        return 1
+    except Exception as exc:
+        print(f"  {label} batch failed:", exc)
 
-    return sketch, sketch_points
+    created = 0
+    for job in jobs:
+        try:
+            add_holes(
+                component_definition,
+                inv,
+                job[points_key],
+                settings.get("diameter", default_diameter),
+                settings.get("depth", default_depth),
+                stiajka_direction(settings),
+                settings.get("feature_name", default_name),
+            )
+            if success_key:
+                job[success_key] = True
+            created += 1
+            print(f"  created {label}")
+        except Exception as exc:
+            print(f"  {label} failed:", exc)
+
+    log_elapsed(f"{label} fallback elapsed", started)
+    return created
 
 
-def create_stiajka_features(part_document, sketches=None, colored_faces=None):
+def create_stiajka_features(
+    part_document,
+    sketches=None,
+    colored_faces=None,
+    update_document=True,
+):
     inv = part_document.Parent
     component_definition = part_document.ComponentDefinition
     if sketches is None:
@@ -575,6 +1184,7 @@ def create_stiajka_features(part_document, sketches=None, colored_faces=None):
     if colored_faces is None:
         colored_faces = get_blue_faces(component_definition)
     created = 0
+    cup_created = False
 
     missing = missing_parameters(
         component_definition.Parameters,
@@ -603,8 +1213,15 @@ def create_stiajka_features(part_document, sketches=None, colored_faces=None):
         sketch_colored_faces = faces_on_sketch_plane(sketch, colored_faces)
         print("  colored faces on sketch plane:", len(sketch_colored_faces))
 
-        axes = construction_axes_data(sketch, sketch_points_data(sketch))
+        face_bounds = face_bounds_cache(sketch, sketch_colored_faces)
+        axes = construction_axes_data(
+            sketch,
+            sketch_points_data(sketch),
+            face_bounds or None,
+        )
         print("  construction axes:", len(axes))
+
+        axis_jobs = []
 
         for axis in axes:
             axis_colored_face = colored_face_for_axis(
@@ -623,72 +1240,69 @@ def create_stiajka_features(part_document, sketches=None, colored_faces=None):
             if len(outer_points) != 2 or len(inner_points) != 2:
                 continue
 
-            outer_hole_feature = None
-            outer_main = stiajka_hole("outer_main")
-            try:
-                outer_hole_feature = add_holes(
-                    component_definition,
-                    inv,
-                    outer_points,
-                    outer_main.get("diameter", "8 mm"),
-                    outer_main.get("depth", "34 mm"),
-                    stiajka_direction(outer_main),
-                    outer_main.get("feature_name", "Stiajka outer 8x34"),
-                )
-                created += 1
-                print("  created outer 8x34")
-            except Exception as exc:
-                print("  outer 8x34 failed:", exc)
+            axis_jobs.append(
+                {
+                    "colored_face": axis_colored_face,
+                    "outer_points": outer_points,
+                    "inner_points": inner_points,
+                    "outer_main_created": False,
+                }
+            )
 
-            outer_secondary = stiajka_hole("outer_secondary")
-            try:
-                add_holes(
-                    component_definition,
-                    inv,
-                    outer_points,
-                    outer_secondary.get("diameter", "5 mm"),
-                    outer_secondary.get("depth", "13 mm"),
-                    stiajka_direction(outer_secondary),
-                    outer_secondary.get("feature_name", "Stiajka outer 5x13"),
-                )
-                created += 1
-                print("  created outer 5x13")
-            except Exception as exc:
-                print("  outer 5x13 failed:", exc)
+        if not axis_jobs:
+            continue
 
-            inner_short = stiajka_hole("inner_short")
-            try:
-                add_holes(
-                    component_definition,
-                    inv,
-                    inner_points,
-                    inner_short.get("diameter", "8 mm"),
-                    inner_short.get("depth", "10 mm"),
-                    stiajka_direction(inner_short),
-                    inner_short.get("feature_name", "Stiajka inner 8x10"),
-                )
-                created += 1
-                print("  created inner 8x10")
-            except Exception as exc:
-                print("  inner 8x10 failed:", exc)
+        batch_started = perf_counter()
+        created += create_hole_batch(
+            component_definition,
+            inv,
+            axis_jobs,
+            "outer_points",
+            "outer_main",
+            "8 mm",
+            "34 mm",
+            "Stiajka outer 8x34",
+            "outer 8x34",
+            success_key="outer_main_created",
+        )
+        created += create_hole_batch(
+            component_definition,
+            inv,
+            axis_jobs,
+            "outer_points",
+            "outer_secondary",
+            "5 mm",
+            "13 mm",
+            "Stiajka outer 5x13",
+            "outer 5x13",
+        )
+        created += create_hole_batch(
+            component_definition,
+            inv,
+            axis_jobs,
+            "inner_points",
+            "inner_short",
+            "8 mm",
+            "10 mm",
+            "Stiajka inner 8x10",
+            "inner 8x10",
+        )
+        created += create_hole_batch(
+            component_definition,
+            inv,
+            axis_jobs,
+            "inner_points",
+            "inner_long",
+            "8 mm",
+            "20 mm",
+            "Stiajka inner 8x20",
+            "inner 8x20",
+        )
+        log_elapsed("normal stiajka batches elapsed", batch_started)
 
-            inner_long = stiajka_hole("inner_long")
-            try:
-                add_holes(
-                    component_definition,
-                    inv,
-                    inner_points,
-                    inner_long.get("diameter", "8 mm"),
-                    inner_long.get("depth", "20 mm"),
-                    stiajka_direction(inner_long),
-                    inner_long.get("feature_name", "Stiajka inner 8x20"),
-                )
-                created += 1
-                print("  created inner 8x20")
-            except Exception as exc:
-                print("  inner 8x20 failed:", exc)
-
-            if outer_hole_feature is None:
+        for job in axis_jobs:
+            axis_started = perf_counter()
+            if not job["outer_main_created"]:
                 print("  side sketch skipped, no outer 8x34 feature")
                 continue
 
@@ -696,37 +1310,54 @@ def create_stiajka_features(part_document, sketches=None, colored_faces=None):
                 component_definition,
                 inv,
                 sketch,
-                axis_colored_face,
-                outer_points,
-                outer_hole_feature,
+                job["colored_face"],
+                job["outer_points"],
             )
+            axis_started = log_elapsed("side sketch elapsed", axis_started)
             if not side_points:
                 print("  side sketch failed")
                 continue
 
-            cup = stiajka_hole("cup")
+            solve_sketch(side_sketch)
             try:
-                add_holes(
-                    component_definition,
-                    inv,
-                    side_points,
-                    cup.get(
-                        "diameter_parameter",
-                        stiajka_parameter("diameter", "\u0421\u0442\u044f\u0436\u043a\u0430_D"),
-                    ),
-                    cup.get(
-                        "depth_parameter",
-                        stiajka_parameter("depth", "\u0421\u0442\u044f\u0436\u043a\u0430_h"),
-                    ),
-                    stiajka_direction(cup),
-                    cup.get("feature_name", "Stiajka cup"),
-                )
+                create_cup_holes(component_definition, inv, side_points)
                 created += 1
+                cup_created = True
                 print("  created cup")
+                axis_started = log_elapsed("cup elapsed", axis_started)
             except Exception as exc:
                 print("  cup failed:", exc)
+                print("  retrying cup on adjacent side face")
+                retry_started = perf_counter()
+                try:
+                    retry_sketch, retry_points = create_side_sketch(
+                        component_definition,
+                        inv,
+                        sketch,
+                        job["colored_face"],
+                        job["outer_points"],
+                        plane_mode="face",
+                    )
+                    log_elapsed("cup retry side sketch elapsed", retry_started)
+                    if not retry_points:
+                        raise RuntimeError("fallback side sketch has no points")
 
-    part_document.Update()
+                    solve_sketch(retry_sketch)
+                    create_cup_holes(component_definition, inv, retry_points)
+                    created += 1
+                    cup_created = True
+                    print("  created cup after retry")
+                    axis_started = log_elapsed("cup retry elapsed", axis_started)
+                except Exception as retry_exc:
+                    print("  cup retry failed:", retry_exc)
+
+    if update_document or cup_created:
+        update_started = perf_counter()
+        part_document.Update()
+        log_elapsed("document update elapsed", update_started)
+    else:
+        print("  document update skipped")
+
     return created
 
 

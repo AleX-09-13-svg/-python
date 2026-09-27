@@ -1,5 +1,6 @@
 import ctypes
 import sys
+from contextlib import contextmanager
 
 from common.constants import (
     DRAWER_SKETCH_PREFIX,
@@ -18,6 +19,7 @@ from common.sketch_geometry import hide_sketch_dimensions, sketch_has_geometry_f
 from sketch.drilling_sketch import create_drilling_sketch
 
 SKETCH_YELLOW_RGB = (255, 220, 0)
+NO_UPDATE_ARG = "--no-update"
 
 
 def show_message(title, text):
@@ -60,6 +62,50 @@ def unique_sketch_name(sketches, base):
             return name
 
 
+@contextmanager
+def screen_updates_suspended(inv):
+    previous = None
+    changed = False
+
+    try:
+        previous = inv.ScreenUpdating
+        inv.ScreenUpdating = False
+        changed = True
+    except Exception:
+        pass
+
+    try:
+        yield
+    finally:
+        if changed:
+            try:
+                inv.ScreenUpdating = previous
+            except Exception:
+                pass
+
+
+@contextmanager
+def sketch_updates_deferred(sketch):
+    previous = None
+    changed = False
+
+    try:
+        previous = sketch.DeferUpdates
+        sketch.DeferUpdates = True
+        changed = True
+    except Exception:
+        pass
+
+    try:
+        yield
+    finally:
+        if changed:
+            try:
+                sketch.DeferUpdates = previous
+            except Exception:
+                pass
+
+
 def create_sketches_for_faces(
     inv,
     doc,
@@ -84,7 +130,12 @@ def create_sketches_for_faces(
         sketch = sketch_on_face_plane(comp.Sketches, group[0], sketch_prefix)
         if sketch is None:
             sketch = comp.Sketches.Add(group[0])
-            set_sketch_color_rgb(sketch, SKETCH_YELLOW_RGB, inv.TransientObjects)
+            set_sketch_color_rgb(
+                sketch,
+                SKETCH_YELLOW_RGB,
+                inv.TransientObjects,
+                include_entities=False,
+            )
             sketch.Name = unique_sketch_name(
                 comp.Sketches,
                 f"{sketch_prefix}_{group_index}",
@@ -94,30 +145,33 @@ def create_sketches_for_faces(
             reused_sketches += 1
             print(f"Using existing {sketch_label} sketch on plane:", sketch.Name)
 
-        if set_sketch_color_rgb(sketch, SKETCH_YELLOW_RGB, inv.TransientObjects):
+        if set_sketch_color_rgb(
+            sketch,
+            SKETCH_YELLOW_RGB,
+            inv.TransientObjects,
+            include_entities=False,
+        ):
             print(f"  {sketch_label} sketch color set:", sketch.Name)
         else:
             print(f"  {sketch_label} sketch color not set:", sketch.Name)
-        hide_sketch_dimensions(sketch)
 
-        for face in group:
-            if sketch_has_geometry_for_face(sketch, face):
-                skipped_faces += 1
-                print(f"  {sketch_label} face geometry already exists, skipped")
-                continue
+        with sketch_updates_deferred(sketch):
+            for face in group:
+                if sketch_has_geometry_for_face(sketch, face):
+                    skipped_faces += 1
+                    print(f"  {sketch_label} face geometry already exists, skipped")
+                    continue
 
-            if create_drilling_sketch(
-                sketch,
-                face,
-                count + 1,
-                inv,
-                comp,
-                edge_offset_param,
-            ):
-                hide_sketch_dimensions(sketch)
-                count += 1
+                if create_drilling_sketch(
+                    sketch,
+                    face,
+                    count + 1,
+                    inv,
+                    comp,
+                    edge_offset_param,
+                ):
+                    count += 1
 
-        set_sketch_color_rgb(sketch, SKETCH_YELLOW_RGB, inv.TransientObjects)
         hide_sketch_dimensions(sketch)
 
     print(f"{sketch_label} faces processed:", count)
@@ -127,10 +181,17 @@ def create_sketches_for_faces(
 
 
 def sketch_mode():
-    if len(sys.argv) > 1:
-        return sys.argv[1].strip().lower()
+    for arg in sys.argv[1:]:
+        value = arg.strip().lower()
+        if value.startswith("--"):
+            continue
+        return value
 
     return "drilling"
+
+
+def should_update_document():
+    return NO_UPDATE_ARG not in [arg.strip().lower() for arg in sys.argv[1:]]
 
 
 def main():
@@ -155,28 +216,30 @@ def main():
     print("Selected faces:", len(selected))
     print("Sketch mode:", mode)
 
-    if mode == "drawer":
-        create_sketches_for_faces(
-            inv,
-            doc,
-            selected,
-            DRAWER_SKETCH_PREFIX,
-            None,
-            "Drawer",
-            "Selected drawer",
-        )
-    else:
-        create_sketches_for_faces(
-            inv,
-            doc,
-            selected,
-            DRILLING_SKETCH_PREFIX,
-            None,
-            "Drilling",
-            "Selected drilling",
-        )
+    with screen_updates_suspended(inv):
+        if mode == "drawer":
+            create_sketches_for_faces(
+                inv,
+                doc,
+                selected,
+                DRAWER_SKETCH_PREFIX,
+                None,
+                "Drawer",
+                "Selected drawer",
+            )
+        else:
+            create_sketches_for_faces(
+                inv,
+                doc,
+                selected,
+                DRILLING_SKETCH_PREFIX,
+                None,
+                "Drilling",
+                "Selected drilling",
+            )
 
-    doc.Update()
+    if should_update_document():
+        doc.Update()
 
 
 if __name__ == "__main__":

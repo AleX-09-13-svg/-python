@@ -7,6 +7,8 @@ from common.face_utils import (
 from common.settings import hole_direction, setting
 from common.sketch_geometry import distance
 
+FEATURE_NAME_COUNTERS = {}
+
 
 def confirmat_setting(*keys, default=None):
     return setting("confirmat", *keys, default=default)
@@ -282,7 +284,7 @@ def construction_axes(sketch):
     return axes
 
 
-def construction_axes_data(sketch, points_data):
+def construction_axes_data(sketch, points_data, face_bounds=None):
     axes = []
 
     for index in range(1, sketch.SketchLines.Count + 1):
@@ -291,6 +293,9 @@ def construction_axes_data(sketch, points_data):
             continue
 
         data = line_data(line)
+        if face_bounds and not axis_data_on_bounds(data, face_bounds):
+            continue
+
         axis_points = cached_points_on_axis(points_data, data)
         if len(axis_points) >= 5:
             data["points"] = axis_points
@@ -356,6 +361,12 @@ def all_surface_bodies(component_definition, inv):
 
 def set_all_bodies_affected(feature, component_definition, inv):
     try:
+        if component_definition.SurfaceBodies.Count <= 1:
+            return
+    except Exception:
+        pass
+
+    try:
         feature.SetAffectedBodies(component_definition.SurfaceBodies)
         log("  affected bodies:", component_definition.SurfaceBodies.Count)
     except Exception as exc:
@@ -395,7 +406,21 @@ def unique_feature_name(features, base):
             return name
 
 
+def fast_feature_name(base):
+    count = FEATURE_NAME_COUNTERS.get(base, 0) + 1
+    FEATURE_NAME_COUNTERS[base] = count
+    if count == 1:
+        return base
+
+    return f"{base} {count}"
+
+
 def add_holes(component_definition, inv, points, diameter, depth, direction, name):
+    print(
+        f"  creating hole feature: {name}, points={len(points)}, "
+        f"diameter={diameter}, depth={depth}, direction={direction}",
+        flush=True,
+    )
     mark_as_hole_centers(points)
     hole_features = component_definition.Features.HoleFeatures
     placement = hole_features.CreateSketchPlacementDefinition(
@@ -408,7 +433,10 @@ def add_holes(component_definition, inv, points, diameter, depth, direction, nam
         direction,
         True,
     )
-    feature.Name = unique_feature_name(hole_features, name)
+    try:
+        feature.Name = fast_feature_name(name)
+    except Exception:
+        pass
     set_all_bodies_affected(feature, component_definition, inv)
     return feature
 
@@ -422,9 +450,9 @@ def try_share_sketch(sketch):
 
 def confirmat_points_for_sketch(sketch, faces, include_center=True, face_label="red"):
     sketch_points = []
-    points_data = sketch_points_data(sketch)
-    axes = construction_axes_data(sketch, points_data)
     face_bounds = face_bounds_cache(sketch, faces)
+    points_data = sketch_points_data(sketch)
+    axes = construction_axes_data(sketch, points_data, face_bounds)
 
     log("  construction axes:", len(axes))
 

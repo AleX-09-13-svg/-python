@@ -76,6 +76,45 @@ def constrain_drilling_points(sk, axis, symmetry_axis, points):
     sk.GeometricConstraints.AddSymmetry(left_inner, right_inner, symmetry_axis)
 
 
+def closest_point_on_line(tg, point, line):
+    start = line.StartSketchPoint.Geometry
+    end = line.EndSketchPoint.Geometry
+    dx = end.X - start.X
+    dy = end.Y - start.Y
+    length2 = dx * dx + dy * dy
+
+    if length2 == 0:
+        return tg.CreatePoint2d(start.X, start.Y)
+
+    t = ((point.X - start.X) * dx + (point.Y - start.Y) * dy) / length2
+    t = max(0, min(1, t))
+    return tg.CreatePoint2d(start.X + dx * t, start.Y + dy * t)
+
+
+def add_side_plane_reference_line(sk, tg, axis, lines):
+    long_edges = sorted(lines, key=line_length2, reverse=True)[:2]
+    if not long_edges:
+        return None
+
+    start = axis.StartSketchPoint.Geometry
+    end = axis.EndSketchPoint.Geometry
+    reference = tg.CreatePoint2d((start.X + end.X) / 2, (start.Y + end.Y) / 2)
+    target = min(
+        long_edges,
+        key=lambda line: closest_point_on_line(tg, reference, line).Y,
+    )
+    end_point = closest_point_on_line(tg, reference, target)
+    line = sk.SketchLines.AddByTwoPoints(reference, end_point)
+    line.Construction = True
+
+    try:
+        sk.GeometricConstraints.AddPerpendicular(line, axis)
+    except Exception:
+        pass
+
+    return line
+
+
 def add_drilling_dimensions(sk, tg, parameters, axes, points, index, edge_offset_param):
     axis, _, center, _, ux, uy, nx, ny = axes
     left_outer, right_outer, left_inner, _, _, outer = points
@@ -128,6 +167,7 @@ def create_drilling_sketch(sk, face, index, inv, comp, edge_offset_param=EDGE_OF
 
     points = create_drilling_points(sk, tg, center, ux, uy, point_distance_value)
     constrain_drilling_points(sk, axes[0], axes[1], points)
+    add_side_plane_reference_line(sk, tg, axes[0], lines)
     add_drilling_dimensions(sk, tg, comp.Parameters, axes, points, index, edge_offset_param)
 
     return True
