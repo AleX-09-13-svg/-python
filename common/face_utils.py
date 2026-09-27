@@ -168,6 +168,15 @@ def sketch_color_matches_face(sketch, face):
 def set_sketch_color_from_face(sketch, face, transient_objects=None):
     rgb = face_color_rgb(face)
     color = create_rgb_color(rgb, transient_objects) or face_color(face)
+    return set_sketch_color(sketch, color, transient_objects)
+
+
+def set_sketch_color_rgb(sketch, rgb, transient_objects=None):
+    color = create_rgb_color(rgb, transient_objects)
+    return set_sketch_color(sketch, color, transient_objects)
+
+
+def set_sketch_color(sketch, color, transient_objects=None):
     if color is None:
         return False
 
@@ -407,6 +416,96 @@ def collect_colored_faces(comp):
 
     faces["drilling"] = faces["red"] + faces["green"] + faces["yellow"]
     return faces
+
+
+def selection_object_label(obj):
+    labels = []
+
+    for attr in ("Type", "ObjectType", "DisplayName", "Name"):
+        try:
+            labels.append(f"{attr}={getattr(obj, attr)}")
+        except Exception:
+            pass
+
+    try:
+        labels.append(f"class={obj.__class__.__name__}")
+    except Exception:
+        pass
+
+    return ", ".join(labels) or "unknown object"
+
+
+def is_face_like(obj):
+    try:
+        obj.Geometry
+        obj.Edges.Count
+        obj.Vertices.Count
+    except Exception:
+        return False
+
+    return True
+
+
+def face_from_selection_object(obj):
+    if is_face_like(obj):
+        return obj
+
+    for attr in ("NativeObject", "ContainingFace"):
+        try:
+            candidate = getattr(obj, attr)
+        except Exception:
+            continue
+
+        if is_face_like(candidate):
+            return candidate
+
+    return None
+
+
+def selected_faces(document, debug=False):
+    faces = []
+
+    try:
+        select_set = document.SelectSet
+    except Exception as exc:
+        if debug:
+            print("Selection read failed:", exc)
+        return faces
+
+    try:
+        count = select_set.Count
+    except Exception as exc:
+        if debug:
+            print("Selection count failed:", exc)
+        return faces
+
+    if debug:
+        print("Selected objects:", count)
+
+    for index in range(1, count + 1):
+        try:
+            selected = select_set.Item(index)
+        except Exception as exc:
+            if debug:
+                print(f"  selection {index} read failed:", exc)
+            continue
+
+        face = face_from_selection_object(selected)
+        if face is None:
+            if debug:
+                print(f"  selection {index} skipped:", selection_object_label(selected))
+            continue
+
+        if debug:
+            try:
+                text = appearance_text(face)
+            except Exception:
+                text = ""
+            print(f"  selection {index} face:", text or "no appearance text")
+
+        faces.append(face)
+
+    return unique_faces(faces)
 
 
 def group_faces_by_plane(faces):

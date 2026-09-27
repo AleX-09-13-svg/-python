@@ -12,11 +12,10 @@ from tkinter.scrolledtext import ScrolledText
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 COMMANDS = {
-    "sketches": ("Создать эскизы", "00_createSketches.py"),
-    "confirmat3": ("Конфирмат 3", "03_confirmat_3штКаркас_на_Красн.py"),
-    "confirmat2": ("Конфирмат 2", "02_confirmat_2штКаркас_на_Жел.py"),
-    "stiajka_frame": ("Стяжка каркас", "01_stiajkaКаркас_на_Зел.py"),
-    "stiajka_drawer": ("Стяжка ящик", "01_stiajkaЯщик_на_Син.py"),
+    "sketches": ("Create sketches", "00_createSketches.py"),
+    "stiajka": ("Stiajka 2pcs", "01_stiajka_2шт.py"),
+    "confirmat2": ("Confirmat 2pcs", "02_confirmat_2шт.py"),
+    "confirmat3": ("Confirmat 3pcs", "03_confirmat_3шт.py"),
 }
 
 
@@ -36,7 +35,7 @@ class LauncherWindow:
 
         self.close_button = tk.Button(
             self.root,
-            text="Закрыть",
+            text="Close",
             command=self.root.destroy,
             state=tk.DISABLED,
         )

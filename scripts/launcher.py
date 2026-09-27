@@ -10,24 +10,20 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 COMMANDS = {
     "sketches": {
-        "title": "Создать эскизы",
+        "title": "Create sketches",
         "script": "00_createSketches.py",
     },
-    "confirmat3": {
-        "title": "Конфирмат 3",
-        "script": "03_confirmat_3штКаркас_на_Красн.py",
+    "stiajka": {
+        "title": "Stiajka 2pcs",
+        "script": "01_stiajka_2шт.py",
     },
     "confirmat2": {
-        "title": "Конфирмат 2",
-        "script": "02_confirmat_2штКаркас_на_Жел.py",
+        "title": "Confirmat 2pcs",
+        "script": "02_confirmat_2шт.py",
     },
-    "stiajka_frame": {
-        "title": "Стяжка каркас",
-        "script": "01_stiajkaКаркас_на_Зел.py",
-    },
-    "stiajka_drawer": {
-        "title": "Стяжка ящик",
-        "script": "01_stiajkaЯщик_на_Син.py",
+    "confirmat3": {
+        "title": "Confirmat 3pcs",
+        "script": "03_confirmat_3шт.py",
     },
 }
 

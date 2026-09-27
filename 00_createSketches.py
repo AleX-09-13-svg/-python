@@ -1,4 +1,5 @@
 import ctypes
+import sys
 
 from common.constants import (
     DRAWER_SKETCH_PREFIX,
@@ -7,14 +8,16 @@ from common.constants import (
     EDGE_OFFSET_FRAME_PARAM,
 )
 from common.face_utils import (
-    collect_colored_faces,
-    group_faces_by_plane_and_appearance,
-    set_sketch_color_from_face,
-    sketch_on_face_plane_with_color,
+    group_faces_by_plane,
+    set_sketch_color_rgb,
+    selected_faces,
+    sketch_on_face_plane,
 )
 from common.inventor_connection import get_inventor
 from common.sketch_geometry import hide_sketch_dimensions, sketch_has_geometry_for_face
 from sketch.drilling_sketch import create_drilling_sketch
+
+SKETCH_YELLOW_RGB = (255, 220, 0)
 
 
 def show_message(title, text):
@@ -67,7 +70,7 @@ def create_sketches_for_faces(
     face_label,
 ):
     comp = doc.ComponentDefinition
-    groups = group_faces_by_plane_and_appearance(faces)
+    groups = group_faces_by_plane(faces)
 
     print(f"{face_label} faces:", len(faces))
     print(f"{sketch_label} sketch planes:", len(groups))
@@ -78,10 +81,10 @@ def create_sketches_for_faces(
     skipped_faces = 0
 
     for group_index, group in enumerate(groups, start=1):
-        sketch = sketch_on_face_plane_with_color(comp.Sketches, group[0], sketch_prefix)
+        sketch = sketch_on_face_plane(comp.Sketches, group[0], sketch_prefix)
         if sketch is None:
             sketch = comp.Sketches.Add(group[0])
-            set_sketch_color_from_face(sketch, group[0], inv.TransientObjects)
+            set_sketch_color_rgb(sketch, SKETCH_YELLOW_RGB, inv.TransientObjects)
             sketch.Name = unique_sketch_name(
                 comp.Sketches,
                 f"{sketch_prefix}_{group_index}",
@@ -91,7 +94,7 @@ def create_sketches_for_faces(
             reused_sketches += 1
             print(f"Using existing {sketch_label} sketch on plane:", sketch.Name)
 
-        if set_sketch_color_from_face(sketch, group[0], inv.TransientObjects):
+        if set_sketch_color_rgb(sketch, SKETCH_YELLOW_RGB, inv.TransientObjects):
             print(f"  {sketch_label} sketch color set:", sketch.Name)
         else:
             print(f"  {sketch_label} sketch color not set:", sketch.Name)
@@ -114,13 +117,20 @@ def create_sketches_for_faces(
                 hide_sketch_dimensions(sketch)
                 count += 1
 
-        set_sketch_color_from_face(sketch, group[0], inv.TransientObjects)
+        set_sketch_color_rgb(sketch, SKETCH_YELLOW_RGB, inv.TransientObjects)
         hide_sketch_dimensions(sketch)
 
     print(f"{sketch_label} faces processed:", count)
     print(f"{sketch_label} sketches created:", created_sketches)
     print(f"{sketch_label} sketches reused:", reused_sketches)
     print(f"{sketch_label} faces skipped:", skipped_faces)
+
+
+def sketch_mode():
+    if len(sys.argv) > 1:
+        return sys.argv[1].strip().lower()
+
+    return "drilling"
 
 
 def main():
@@ -134,34 +144,37 @@ def main():
     ):
         return
 
-    colored_faces = collect_colored_faces(comp)
-    drilling_faces = colored_faces["drilling"]
-    blue_faces = colored_faces["blue"]
+    selected = selected_faces(doc, debug=True)
+    if not selected:
+        message = "Select one or more faces before running this script."
+        show_message("No selected faces", message)
+        print(message)
+        return
 
-    print("Red faces:", len(colored_faces["red"]))
-    print("Green faces:", len(colored_faces["green"]))
-    print("Yellow faces:", len(colored_faces["yellow"]))
-    print("Drilling faces:", len(drilling_faces))
+    mode = sketch_mode()
+    print("Selected faces:", len(selected))
+    print("Sketch mode:", mode)
 
-    create_sketches_for_faces(
-        inv,
-        doc,
-        drilling_faces,
-        DRILLING_SKETCH_PREFIX,
-        EDGE_OFFSET_FRAME_PARAM,
-        "Drilling",
-        "Frame drilling",
-    )
-
-    create_sketches_for_faces(
-        inv,
-        doc,
-        blue_faces,
-        DRAWER_SKETCH_PREFIX,
-        EDGE_OFFSET_DRAWER_PARAM,
-        "Drawer",
-        "Blue drawer",
-    )
+    if mode == "drawer":
+        create_sketches_for_faces(
+            inv,
+            doc,
+            selected,
+            DRAWER_SKETCH_PREFIX,
+            None,
+            "Drawer",
+            "Selected drawer",
+        )
+    else:
+        create_sketches_for_faces(
+            inv,
+            doc,
+            selected,
+            DRILLING_SKETCH_PREFIX,
+            None,
+            "Drilling",
+            "Selected drilling",
+        )
 
     doc.Update()
 

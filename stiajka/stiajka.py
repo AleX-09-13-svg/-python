@@ -79,12 +79,24 @@ def find_stiajka_sketches(component_definition):
 
 def find_stiajka_sketches_on_green_faces(component_definition):
     green_faces = get_green_faces(component_definition)
+    return find_stiajka_sketches_on_faces(
+        component_definition,
+        green_faces,
+        DRILLING_SKETCH_PREFIX,
+    )
+
+
+def find_stiajka_sketches_on_faces(
+    component_definition,
+    faces,
+    sketch_prefix=DRILLING_SKETCH_PREFIX,
+):
     sketches = []
 
     for index in range(1, component_definition.Sketches.Count + 1):
         sketch = component_definition.Sketches.Item(index)
         try:
-            if not sketch.Name.startswith(DRILLING_SKETCH_PREFIX):
+            if not sketch.Name.startswith(sketch_prefix):
                 continue
         except Exception:
             continue
@@ -94,7 +106,7 @@ def find_stiajka_sketches_on_green_faces(component_definition):
         except Exception:
             continue
 
-        for face in green_faces:
+        for face in faces:
             try:
                 if same_plane_entity(sketch_plane, face):
                     sketches.append(sketch)

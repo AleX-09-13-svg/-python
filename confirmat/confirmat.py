@@ -450,12 +450,16 @@ def confirmat_points_for_sketch(sketch, faces, include_center=True, face_label="
     return unique_points(sketch_points)
 
 
-def create_confirmat_features(part_document, sketches=None):
+def create_confirmat_features(part_document, sketches=None, faces=None, face_label="red"):
     inv = part_document.Parent
     component_definition = part_document.ComponentDefinition
-    red_faces = get_red_faces(component_definition)
-    red_faces_before = red_faces[:]
-    sketches = sketches or find_confirmat_sketches(component_definition)
+    colored_faces = faces or get_red_faces(component_definition)
+    colored_faces_before = colored_faces[:]
+    sketches = sketches or find_confirmat_sketches_on_faces(
+        component_definition,
+        colored_faces,
+        face_label,
+    )
     outer = confirmat_hole("outer")
     inner = confirmat_hole("inner")
     created = 0
@@ -471,10 +475,14 @@ def create_confirmat_features(part_document, sketches=None):
         )
         try_share_sketch(sketch)
 
-        sketch_red_faces = red_faces_on_sketch_plane(sketch, red_faces)
-        print("  red faces on sketch plane:", len(sketch_red_faces))
+        sketch_colored_faces = faces_on_sketch_plane(sketch, colored_faces)
+        print(f"  {face_label} faces on sketch plane:", len(sketch_colored_faces))
 
-        sketch_points = confirmat_points_for_sketch(sketch, sketch_red_faces)
+        sketch_points = confirmat_points_for_sketch(
+            sketch,
+            sketch_colored_faces,
+            face_label=face_label,
+        )
         print("  total confirmat points:", len(sketch_points))
         if not sketch_points:
             continue
@@ -511,25 +519,29 @@ def create_confirmat_features(part_document, sketches=None):
         except Exception as exc:
             print("  3mm outward failed:", exc)
 
-    red_faces_after = get_red_faces(component_definition)
-    reset_count = reset_faces_to_feature_appearance(
-        red_faces_before + red_faces_after,
-        "red face",
-    )
-    print("Red faces reset to feature appearance:", reset_count)
+    if faces is None:
+        colored_faces_after = get_red_faces(component_definition)
+        reset_count = reset_faces_to_feature_appearance(
+            colored_faces_before + colored_faces_after,
+            f"{face_label} face",
+        )
+        print(f"{face_label.capitalize()} faces reset to feature appearance:", reset_count)
+    else:
+        print(f"{face_label.capitalize()} faces appearance reset skipped")
+
     part_document.Update()
     return created
 
 
-def create_confirmat_2_features(part_document, sketches=None):
+def create_confirmat_2_features(part_document, sketches=None, faces=None, face_label="yellow"):
     inv = part_document.Parent
     component_definition = part_document.ComponentDefinition
-    yellow_faces = get_yellow_faces(component_definition)
-    yellow_faces_before = yellow_faces[:]
+    colored_faces = faces or get_yellow_faces(component_definition)
+    colored_faces_before = colored_faces[:]
     sketches = sketches or find_confirmat_sketches_on_faces(
         component_definition,
-        yellow_faces,
-        "yellow",
+        colored_faces,
+        face_label,
     )
     outer = confirmat_hole("outer")
     inner = confirmat_hole("inner")
@@ -546,14 +558,14 @@ def create_confirmat_2_features(part_document, sketches=None):
         )
         try_share_sketch(sketch)
 
-        sketch_yellow_faces = faces_on_sketch_plane(sketch, yellow_faces)
-        print("  yellow faces on sketch plane:", len(sketch_yellow_faces))
+        sketch_colored_faces = faces_on_sketch_plane(sketch, colored_faces)
+        print(f"  {face_label} faces on sketch plane:", len(sketch_colored_faces))
 
         sketch_points = confirmat_points_for_sketch(
             sketch,
-            sketch_yellow_faces,
+            sketch_colored_faces,
             include_center=False,
-            face_label="yellow",
+            face_label=face_label,
         )
         print("  total confirmat points:", len(sketch_points))
         if not sketch_points:
@@ -591,11 +603,15 @@ def create_confirmat_2_features(part_document, sketches=None):
         except Exception as exc:
             print("  2pcs 3mm outward failed:", exc)
 
-    yellow_faces_after = get_yellow_faces(component_definition)
-    reset_count = reset_faces_to_feature_appearance(
-        yellow_faces_before + yellow_faces_after,
-        "yellow face",
-    )
-    print("Yellow faces reset to feature appearance:", reset_count)
+    if faces is None:
+        colored_faces_after = get_yellow_faces(component_definition)
+        reset_count = reset_faces_to_feature_appearance(
+            colored_faces_before + colored_faces_after,
+            f"{face_label} face",
+        )
+        print(f"{face_label.capitalize()} faces reset to feature appearance:", reset_count)
+    else:
+        print(f"{face_label.capitalize()} faces appearance reset skipped")
+
     part_document.Update()
     return created
