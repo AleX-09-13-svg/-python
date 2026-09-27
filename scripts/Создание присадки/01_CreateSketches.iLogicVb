@@ -1,0 +1,9 @@
+Dim scriptPath As String = "D:\Копия Google диска\02_Скрипты\01_Скрипты для работы\Присадка кодом Python\scripts\launcher_window.py"
+Dim processInfo As New System.Diagnostics.ProcessStartInfo()
+
+processInfo.FileName = "pythonw.exe"
+processInfo.Arguments = """" & scriptPath & """ sketches"
+processInfo.WorkingDirectory = System.IO.Path.GetDirectoryName(scriptPath)
+processInfo.UseShellExecute = False
+
+System.Diagnostics.Process.Start(processInfo)
