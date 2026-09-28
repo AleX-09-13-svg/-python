@@ -10,9 +10,9 @@ from common.selected_workflow import (
 )
 from stiajka.stiajka import (
     cup_edge_offset_param_for_length,
-    create_selected_cup_sketches,
+    create_cup_sketches_for_plan,
+    create_selected_stiajka_plan,
     create_stiajka_features,
-    split_stiajka_faces,
     stiajka_required_parameter_names,
 )
 from time import perf_counter
@@ -34,15 +34,16 @@ def main():
     if not ensure_parameters(comp, stiajka_required_parameter_names()):
         return
     started = log_elapsed("Selected context", started)
-    end_faces, front_faces = split_stiajka_faces(faces)
-    if not end_faces:
+    plan = create_selected_stiajka_plan(faces)
+    if plan is None:
         print("Select end faces in one plane and one or more front faces.")
         return
+    started = log_elapsed("Create stiajka plan", started)
 
     sketch_result = create_sketches_for_faces(
         doc.Parent,
         doc,
-        end_faces,
+        plan.end_faces,
         DRILLING_SKETCH_PREFIX,
         cup_edge_offset_param_for_length,
         "Drilling",
@@ -51,11 +52,10 @@ def main():
     )
     started = log_elapsed("Create sketches", started)
 
-    cup_sketches = create_selected_cup_sketches(
+    cup_sketches = create_cup_sketches_for_plan(
         comp,
         doc.Parent,
-        front_faces,
-        end_faces,
+        plan,
         reuse_existing=False,
     )
     started = log_elapsed("Create cup sketches", started)
@@ -65,7 +65,7 @@ def main():
     created = create_stiajka_features(
         doc,
         sketches=sketches,
-        colored_faces=end_faces,
+        colored_faces=plan.end_faces,
         cup_sketches=cup_sketches,
         update_document=False,
     )

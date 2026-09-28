@@ -1,4 +1,5 @@
 import ctypes
+from dataclasses import dataclass
 from time import perf_counter
 
 from common.constants import (
@@ -44,6 +45,23 @@ from confirmat.confirmat import (
 STIAJKA_CUP_SKETCH_PREFIX = "StiajkaCupSketch"
 STIAJKA_CUP_SKETCH_RGB = (0, 180, 255)
 STIAJKA_CUP_DRAWER_EDGE_MAX_CM = 30.0
+
+
+@dataclass
+class StiajkaCupSketchJob:
+    index: int
+    front_face: object
+    end_face: object
+
+
+@dataclass
+class StiajkaPlan:
+    end_faces: list
+    front_faces: list
+    cup_jobs: list
+    skipped_front_faces: int = 0
+
+
 def stiajka_setting(*keys, default=None):
     return setting("stiajka", *keys, default=default)
 
@@ -265,6 +283,43 @@ def matching_end_face(front_face, end_faces):
     return max(candidates, key=face_area)
 
 
+def create_selected_stiajka_plan(faces):
+    end_faces, front_faces = split_stiajka_faces(faces)
+    if not end_faces:
+        return None
+
+    cup_jobs = []
+    skipped_front_faces = 0
+
+    for index, front_face in enumerate(front_faces, start=1):
+        end_face = matching_end_face(front_face, end_faces)
+        if end_face is None:
+            skipped_front_faces += 1
+            continue
+
+        cup_jobs.append(
+            StiajkaCupSketchJob(
+                index=index,
+                front_face=front_face,
+                end_face=end_face,
+            )
+        )
+
+    print(
+        "Stiajka plan:",
+        f"end_faces={len(end_faces)}",
+        f"front_faces={len(front_faces)}",
+        f"cup_jobs={len(cup_jobs)}",
+        f"skipped_front_faces={skipped_front_faces}",
+    )
+    return StiajkaPlan(
+        end_faces=end_faces,
+        front_faces=front_faces,
+        cup_jobs=cup_jobs,
+        skipped_front_faces=skipped_front_faces,
+    )
+
+
 def cup_sketch_on_face_plane(sketches, face):
     for sketch in sketches:
         try:
@@ -276,23 +331,18 @@ def cup_sketch_on_face_plane(sketches, face):
     return None
 
 
-def create_selected_cup_sketches(comp, inv, front_faces, end_faces, reuse_existing=True):
+def create_cup_sketches_for_plan(comp, inv, plan, reuse_existing=True):
     sketches = []
     sketch_names = set()
 
-    for index, front_face in enumerate(front_faces, start=1):
-        end_face = matching_end_face(front_face, end_faces)
-        if end_face is None:
-            print(f"  front face {index}: no shared end face, skipped")
-            continue
-
-        sketch = cup_sketch_on_face_plane(sketches, front_face)
+    for job in plan.cup_jobs:
+        sketch = cup_sketch_on_face_plane(sketches, job.front_face)
         sketch = create_stiajka_cup_sketch(
             comp,
             inv,
-            front_face,
-            end_face,
-            index,
+            job.front_face,
+            job.end_face,
+            job.index,
             sketch=sketch,
             reuse_existing=reuse_existing,
         )
@@ -306,6 +356,35 @@ def create_selected_cup_sketches(comp, inv, front_faces, end_faces, reuse_existi
             sketches.append(sketch)
 
     return sketches
+
+
+def create_selected_cup_sketches(comp, inv, front_faces, end_faces, reuse_existing=True):
+    cup_jobs = []
+
+    for index, front_face in enumerate(front_faces, start=1):
+        end_face = matching_end_face(front_face, end_faces)
+        if end_face is None:
+            print(f"  front face {index}: no shared end face, skipped")
+            continue
+
+        cup_jobs.append(
+            StiajkaCupSketchJob(
+                index=index,
+                front_face=front_face,
+                end_face=end_face,
+            )
+        )
+
+    return create_cup_sketches_for_plan(
+        comp,
+        inv,
+        StiajkaPlan(
+            end_faces=end_faces,
+            front_faces=front_faces,
+            cup_jobs=cup_jobs,
+        ),
+        reuse_existing=reuse_existing,
+    )
 
 
 def unique_sketch_name(sketches, base):
