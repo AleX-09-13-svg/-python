@@ -13,9 +13,13 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 COMMANDS = {
     "sketches": ("Create sketches", "00_createSketches.py"),
-    "stiajka": ("Stiajka 2pcs", "01_stiajka_2шт.py"),
-    "confirmat2": ("Confirmat 2pcs", "02_confirmat_2шт.py"),
-    "confirmat3": ("Confirmat 3pcs", "03_confirmat_3шт.py"),
+    "stiajka": ("Stiajka 2pcs", "04_stiajka_2\u0448\u0442.py"),
+    "confirmat2": ("Confirmat 2pcs Bok16", "02_confirmat_2\u0448\u0442_Bok16.py"),
+    "confirmat3": ("Confirmat 3pcs Bok16", "03_confirmat_3\u0448\u0442_Bok16.py"),
+    "confirmat2_bok16": ("Confirmat 2pcs Bok16", "02_confirmat_2\u0448\u0442_Bok16.py"),
+    "confirmat3_bok16": ("Confirmat 3pcs Bok16", "03_confirmat_3\u0448\u0442_Bok16.py"),
+    "confirmat2_bok17": ("Confirmat 2pcs Bok17", "22_confirmat_2\u0448\u0442_Bok17.py"),
+    "confirmat3_bok17": ("Confirmat 3pcs Bok17", "33_confirmat_3\u0448\u0442_Bok17.py"),
 }
 
 

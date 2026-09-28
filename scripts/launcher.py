@@ -15,15 +15,31 @@ COMMANDS = {
     },
     "stiajka": {
         "title": "Stiajka 2pcs",
-        "script": "01_stiajka_2шт.py",
+        "script": "04_stiajka_2\u0448\u0442.py",
     },
     "confirmat2": {
-        "title": "Confirmat 2pcs",
-        "script": "02_confirmat_2шт.py",
+        "title": "Confirmat 2pcs Bok16",
+        "script": "02_confirmat_2\u0448\u0442_Bok16.py",
     },
     "confirmat3": {
-        "title": "Confirmat 3pcs",
-        "script": "03_confirmat_3шт.py",
+        "title": "Confirmat 3pcs Bok16",
+        "script": "03_confirmat_3\u0448\u0442_Bok16.py",
+    },
+    "confirmat2_bok16": {
+        "title": "Confirmat 2pcs Bok16",
+        "script": "02_confirmat_2\u0448\u0442_Bok16.py",
+    },
+    "confirmat3_bok16": {
+        "title": "Confirmat 3pcs Bok16",
+        "script": "03_confirmat_3\u0448\u0442_Bok16.py",
+    },
+    "confirmat2_bok17": {
+        "title": "Confirmat 2pcs Bok17",
+        "script": "22_confirmat_2\u0448\u0442_Bok17.py",
+    },
+    "confirmat3_bok17": {
+        "title": "Confirmat 3pcs Bok17",
+        "script": "33_confirmat_3\u0448\u0442_Bok17.py",
     },
 }
 

@@ -10,6 +10,9 @@
       "aligned": 19203
     }
   },
+  "drilling": {
+    "drawer_edge_max_cm": 60.0
+  },
   "confirmat": {
     "debug": false,
     "outer": {
@@ -19,12 +22,36 @@
     "inner": {
       "diameter": "3 mm",
       "depth": "35 mm"
+    },
+    "outer_3pcs": {
+      "diameter": "M_Конфирмат_D_вПласть",
+      "depth": "Толщина_каркаса",
+      "direction": "positive",
+      "feature_name": "M_Конфирмат в пласть 3шт"
+    },
+    "inner_3pcs": {
+      "diameter": "M_Конфирмат_D_вТорец",
+      "depth": "M_Конфирмат_глубина",
+      "direction": "positive",
+      "feature_name": "M_Конфирмат в торец 3шт"
+    },
+    "outer_2pcs": {
+      "diameter": "M_Конфирмат_D_вПласть",
+      "depth": "Толщина_каркаса",
+      "direction": "positive",
+      "feature_name": "M_Конфирмат в пласть"
+    },
+    "inner_2pcs": {
+      "diameter": "M_Конфирмат_D_вТорец",
+      "depth": "M_Конфирмат_глубина",
+      "direction": "positive",
+      "feature_name": "M_Конфирмат в торец"
     }
   },
   "stiajka": {
     "parameters": {
       "diameter": "Стяжка_D",
-      "depth": "Стяжка_h",
+      "depth": "Стяжка_резьбыШтока_Петля_h",
       "offset": "Стяжка_отступ"
     },
     "side_offset": 3.4,
@@ -54,7 +81,7 @@
     },
     "cup": {
       "diameter_parameter": "Стяжка_D",
-      "depth_parameter": "Стяжка_h",
+      "depth_parameter": "Стяжка_резьбыШтока_Петля_h",
       "direction": "positive",
       "feature_name": "Stiajka cup"
     }

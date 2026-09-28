@@ -1,11 +1,36 @@
 import ctypes
 from time import perf_counter
 
-from common.constants import DRAWER_SKETCH_PREFIX, DRILLING_SKETCH_PREFIX, POINT_DISTANCE_PARAM
-from common.face_utils import get_blue_faces, get_green_faces, reset_faces_to_feature_appearance
+from common.constants import (
+    DRAWER_SKETCH_PREFIX,
+    DRILLING_SKETCH_PREFIX,
+    EDGE_OFFSET_DRAWER_PARAM,
+    EDGE_OFFSET_FRAME_PARAM,
+    GRID_STEP_CM,
+    POINT_DISTANCE_PARAM,
+)
+from common.face_utils import (
+    get_blue_faces,
+    get_green_faces,
+    group_faces_by_plane,
+    reset_faces_to_feature_appearance,
+    set_sketch_color_rgb,
+    sketch_on_face_plane,
+)
 from common.inventor_connection import get_inventor
-from common.settings import dimension_orientation, hole_direction, setting
-from common.sketch_geometry import get_parameter_value
+from common.settings import (
+    dimension_orientation,
+    drawer_edge_max_cm,
+    hole_direction,
+    setting,
+)
+from common.sketch_geometry import (
+    add_aligned_dimension,
+    get_parameter_value,
+    hide_sketch_dimensions,
+    project_face_edges,
+    unique_parameter_name,
+)
 from confirmat.confirmat import same_plane_entity
 from confirmat.confirmat import (
     add_holes,
@@ -15,6 +40,9 @@ from confirmat.confirmat import (
     unique_points,
 )
 
+STIAJKA_CUP_SKETCH_PREFIX = "StiajkaCupSketch"
+STIAJKA_CUP_SKETCH_RGB = (0, 180, 255)
+STIAJKA_CUP_DRAWER_EDGE_MAX_CM = 30.0
 def stiajka_setting(*keys, default=None):
     return setting("stiajka", *keys, default=default)
 
@@ -108,6 +136,118 @@ def missing_parameters(parameters, names):
             missing.append(name)
 
     return missing
+
+
+def unique_names(names):
+    result = []
+    seen = set()
+
+    for name in names:
+        if not name or name in seen:
+            continue
+
+        seen.add(name)
+        result.append(name)
+
+    return result
+
+
+def stiajka_required_parameter_names():
+    names = [
+        stiajka_parameter("diameter", "\u0421\u0442\u044f\u0436\u043a\u0430_D"),
+        stiajka_parameter("depth", "\u0421\u0442\u044f\u0436\u043a\u0430_h"),
+        stiajka_parameter("offset", "\u0421\u0442\u044f\u0436\u043a\u0430_\u043e\u0442\u0441\u0442\u0443\u043f"),
+    ]
+
+    for key in ("outer_main", "outer_secondary", "inner_short", "inner_long"):
+        settings = stiajka_hole(key)
+        names.append(settings.get("diameter"))
+        names.append(settings.get("depth"))
+
+    cup = stiajka_hole("cup")
+    names.append(cup.get("diameter_parameter"))
+    names.append(cup.get("depth_parameter"))
+
+    return unique_names(names)
+
+
+def face_area(face):
+    try:
+        return face.Evaluator.Area
+    except Exception:
+        pass
+
+    try:
+        points = [vertex.Point for vertex in face.Vertices]
+        xs = [point.X for point in points]
+        ys = [point.Y for point in points]
+        zs = [point.Z for point in points]
+        lengths = sorted(
+            (
+                max(xs) - min(xs),
+                max(ys) - min(ys),
+                max(zs) - min(zs),
+            ),
+            reverse=True,
+        )
+        return lengths[0] * lengths[1]
+    except Exception:
+        return 0
+
+
+def split_stiajka_faces(faces):
+    groups = group_faces_by_plane(faces)
+    if len(groups) != 2:
+        return None, None
+
+    ordered = sorted(groups, key=lambda group: sum(face_area(face) for face in group))
+    end_faces = ordered[0]
+    front_faces = ordered[1]
+    print(
+        "Stiajka end plane:",
+        f"faces={len(end_faces)}",
+        f"area={sum(face_area(face) for face in end_faces):.4f}",
+    )
+    print(
+        "Stiajka front plane:",
+        f"faces={len(front_faces)}",
+        f"area={sum(face_area(face) for face in front_faces):.4f}",
+    )
+
+    return end_faces, front_faces
+
+
+def matching_end_face(front_face, end_faces):
+    candidates = [
+        end_face
+        for end_face in end_faces
+        if shared_face_edge(front_face, end_face) is not None
+    ]
+    if not candidates:
+        return None
+
+    return max(candidates, key=face_area)
+
+
+def create_selected_cup_sketches(comp, inv, front_faces, end_faces):
+    sketches = []
+    for index, front_face in enumerate(front_faces, start=1):
+        end_face = matching_end_face(front_face, end_faces)
+        if end_face is None:
+            print(f"  front face {index}: no shared end face, skipped")
+            continue
+
+        sketches.append(
+            create_stiajka_cup_sketch(
+                comp,
+                inv,
+                front_face,
+                end_face,
+                index,
+            )
+        )
+
+    return sketches
 
 
 def unique_sketch_name(sketches, base):
@@ -984,6 +1124,438 @@ def add_projected_center_point(sketch, center_coord, source_point):
         return sketch.SketchPoints.Add(center_coord, False)
 
 
+def edge_offset_param_for_length(long_edge_length):
+    if long_edge_length <= drawer_edge_max_cm():
+        return EDGE_OFFSET_DRAWER_PARAM
+
+    return EDGE_OFFSET_FRAME_PARAM
+
+
+def cup_edge_offset_param_for_length(long_edge_length):
+    if long_edge_length <= STIAJKA_CUP_DRAWER_EDGE_MAX_CM:
+        return EDGE_OFFSET_DRAWER_PARAM
+
+    return EDGE_OFFSET_FRAME_PARAM
+
+
+def vector_length2d(dx, dy):
+    return (dx * dx + dy * dy) ** 0.5
+
+
+def face_center_in_sketch(sketch, face, tg):
+    points = [sketch.ModelToSketchSpace(vertex.Point) for vertex in face.Vertices]
+    return tg.CreatePoint2d(
+        sum(point.X for point in points) / len(points),
+        sum(point.Y for point in points) / len(points),
+    )
+
+
+def drilling_sketch_outer_model_points_on_face(component_definition, face):
+    points = []
+
+    for index in range(1, component_definition.Sketches.Count + 1):
+        sketch = component_definition.Sketches.Item(index)
+        try:
+            if not sketch.Name.startswith(DRILLING_SKETCH_PREFIX):
+                continue
+            if not same_plane_entity(sketch.PlanarEntity, face):
+                continue
+        except Exception:
+            continue
+
+        face_bounds = face_bounds_cache(sketch, [face])
+        axes = construction_axes_data(
+            sketch,
+            sketch_points_data(sketch),
+            face_bounds or None,
+        )
+        for axis in axes:
+            outer_points, _ = axis_stiajka_points(axis)
+            for point in outer_points:
+                try:
+                    points.append(sketch.SketchToModelSpace(point.Geometry))
+                except Exception:
+                    continue
+
+    return points
+
+
+def point_distance_along_edge(point, edge_start, edge_end):
+    dx = edge_end.X - edge_start.X
+    dy = edge_end.Y - edge_start.Y
+    dz = edge_end.Z - edge_start.Z
+    length2 = dx * dx + dy * dy + dz * dz
+    if length2 == 0:
+        return 0
+
+    t = (
+        (point.X - edge_start.X) * dx
+        + (point.Y - edge_start.Y) * dy
+        + (point.Z - edge_start.Z) * dz
+    ) / length2
+    t = max(0, min(1, t))
+    return (length2**0.5) * t
+
+
+def cup_distances_from_outer_points(component_definition, end_face, shared_edge, length):
+    edge_start, edge_end = edge_end_points(shared_edge)
+    distances = [
+        point_distance_along_edge(point, edge_start, edge_end)
+        for point in drilling_sketch_outer_model_points_on_face(component_definition, end_face)
+    ]
+    distances = sorted({round(distance, 6) for distance in distances})
+    if len(distances) < 2:
+        return None
+
+    return max(0, min(length, distances[0])), max(0, min(length, distances[-1]))
+
+
+def front_reference_edge_near_outer_points(
+    component_definition,
+    front_face,
+    end_face,
+    fallback_edge,
+):
+    points = drilling_sketch_outer_model_points_on_face(component_definition, end_face)
+    if not points:
+        return fallback_edge
+
+    best_edge = fallback_edge
+    best_score = None
+
+    try:
+        count = front_face.Edges.Count
+    except Exception:
+        return fallback_edge
+
+    for index in range(1, count + 1):
+        try:
+            edge = front_face.Edges.Item(index)
+            score = sum(point_to_edge_distance2(point, edge) for point in points)
+        except Exception:
+            continue
+
+        if best_score is None or score < best_score:
+            best_edge = edge
+            best_score = score
+
+    return best_edge
+
+
+def shared_face_edge(face1, face2):
+    try:
+        face2_edges = {
+            face_key(face2.Edges.Item(index)): face2.Edges.Item(index)
+            for index in range(1, face2.Edges.Count + 1)
+        }
+    except Exception:
+        return None
+
+    for index in range(1, face1.Edges.Count + 1):
+        try:
+            edge = face1.Edges.Item(index)
+            key = face_key(edge)
+        except Exception:
+            continue
+
+        if key in face2_edges:
+            return edge
+
+    candidates = []
+    for front_index in range(1, face1.Edges.Count + 1):
+        try:
+            front_edge = face1.Edges.Item(front_index)
+        except Exception:
+            continue
+
+        for end_index in range(1, face2.Edges.Count + 1):
+            try:
+                end_edge = face2.Edges.Item(end_index)
+            except Exception:
+                continue
+
+            try:
+                if point_to_edge_distance2(front_edge.StartVertex.Point, end_edge) < 0.0001:
+                    candidates.append(front_edge)
+                    break
+            except Exception:
+                continue
+
+    if not candidates:
+        return None
+
+    return max(candidates, key=edge_length2)
+
+
+def add_stiajka_cup_sketch_dimensions(
+    sketch,
+    tg,
+    parameters,
+    reference_line,
+    offset_line,
+    cup_points,
+    point_distance_value,
+    index,
+    offset_expression=None,
+    point_distance_expression=None,
+    anchor_point=None,
+    anchor_offset_expression=None,
+):
+    start = reference_line.StartSketchPoint.Geometry
+    end = reference_line.EndSketchPoint.Geometry
+    dx = end.X - start.X
+    dy = end.Y - start.Y
+    length = vector_length2d(dx, dy)
+    if length == 0:
+        return
+
+    nx = -dy / length
+    ny = dx / length
+    center = tg.CreatePoint2d((start.X + end.X) / 2, (start.Y + end.Y) / 2)
+
+    long_dim = add_aligned_dimension(
+        sketch,
+        reference_line.StartSketchPoint,
+        reference_line.EndSketchPoint,
+        tg.CreatePoint2d(center.X + nx * 2, center.Y + ny * 2),
+        True,
+    )
+    long_dim.Parameter.Name = unique_parameter_name(parameters, f"Long_edge_{index}")
+
+    point_distance_dim = add_aligned_dimension(
+        sketch,
+        cup_points[0],
+        cup_points[1],
+        tg.CreatePoint2d(center.X + nx * 4, center.Y + ny * 4),
+    )
+    point_distance_dim.Parameter.Name = unique_parameter_name(parameters, POINT_DISTANCE_PARAM)
+    edge_offset_param = cup_edge_offset_param_for_length(length)
+    point_distance_dim.Parameter.Expression = point_distance_expression or (
+        f"floor(({long_dim.Parameter.Name} - {edge_offset_param} * 2) / 32 mm) * 32 mm"
+    )
+
+    offset_dim = add_aligned_dimension(
+        sketch,
+        reference_line.StartSketchPoint,
+        offset_line.StartSketchPoint,
+        tg.CreatePoint2d(
+            (reference_line.StartSketchPoint.Geometry.X + offset_line.StartSketchPoint.Geometry.X) / 2,
+            (reference_line.StartSketchPoint.Geometry.Y + offset_line.StartSketchPoint.Geometry.Y) / 2,
+        ),
+    )
+    offset_dim.Parameter.Expression = offset_expression or stiajka_parameter(
+        "offset",
+        "\u0421\u0442\u044f\u0436\u043a\u0430_\u043e\u0442\u0441\u0442\u0443\u043f",
+    )
+
+    if anchor_point is not None:
+        anchor = anchor_point.Geometry
+        point = cup_points[0].Geometry
+        anchor_offset_dim = add_aligned_dimension(
+            sketch,
+            anchor_point,
+            cup_points[0],
+            tg.CreatePoint2d(
+                (anchor.X + point.X) / 2 + nx * 6,
+                (anchor.Y + point.Y) / 2 + ny * 6,
+            ),
+        )
+        anchor_offset_dim.Parameter.Expression = anchor_offset_expression or (
+            f"({long_dim.Parameter.Name} - {point_distance_dim.Parameter.Name}) / 2"
+        )
+
+
+def delete_sketch_collection_items(collection):
+    try:
+        count = collection.Count
+    except Exception:
+        return
+
+    for index in range(count, 0, -1):
+        try:
+            collection.Item(index).Delete()
+        except Exception:
+            continue
+
+
+def clear_stiajka_cup_sketch(sketch):
+    for collection_name in (
+        "DimensionConstraints",
+        "GeometricConstraints",
+        "SketchLines",
+        "SketchPoints",
+    ):
+        try:
+            delete_sketch_collection_items(getattr(sketch, collection_name))
+        except Exception:
+            continue
+
+
+def create_stiajka_cup_sketch(
+    component_definition,
+    inv,
+    front_face,
+    end_face,
+    index=1,
+):
+    sketch = sketch_on_face_plane(
+        component_definition.Sketches,
+        front_face,
+        STIAJKA_CUP_SKETCH_PREFIX,
+    )
+    if sketch is None:
+        sketch = component_definition.Sketches.Add(front_face)
+        sketch.Name = unique_sketch_name(
+            component_definition.Sketches,
+            f"{STIAJKA_CUP_SKETCH_PREFIX}_{index}",
+        )
+    else:
+        print("Using existing stiajka cup sketch:", sketch.Name)
+        clear_stiajka_cup_sketch(sketch)
+
+    set_sketch_color_rgb(
+        sketch,
+        STIAJKA_CUP_SKETCH_RGB,
+        inv.TransientObjects,
+        include_entities=False,
+    )
+
+    tg = inv.TransientGeometry
+    shared_edge = shared_face_edge(front_face, end_face)
+    if shared_edge is None:
+        raise RuntimeError("selected faces do not share an edge")
+    reference_edge = front_reference_edge_near_outer_points(
+        component_definition,
+        front_face,
+        end_face,
+        shared_edge,
+    )
+
+    project_face_edges(sketch, front_face)
+    reference_line = sketch.AddByProjectingEntity(reference_edge)
+    reference_line.Construction = True
+
+    start = reference_line.StartSketchPoint.Geometry
+    end = reference_line.EndSketchPoint.Geometry
+    dx = end.X - start.X
+    dy = end.Y - start.Y
+    length = vector_length2d(dx, dy)
+    if length == 0:
+        raise RuntimeError("reference edge has zero length in sketch")
+
+    ux = dx / length
+    uy = dy / length
+    nx = -uy
+    ny = ux
+    midpoint = tg.CreatePoint2d((start.X + end.X) / 2, (start.Y + end.Y) / 2)
+    face_center = face_center_in_sketch(sketch, front_face, tg)
+    outer_side = (
+        (face_center.X - midpoint.X) * nx
+        + (face_center.Y - midpoint.Y) * ny
+    )
+    if outer_side < 0:
+        nx = -nx
+        ny = -ny
+
+    offset_parameter = stiajka_parameter(
+        "offset",
+        "\u0421\u0442\u044f\u0436\u043a\u0430_\u043e\u0442\u0441\u0442\u0443\u043f",
+    )
+    offset_value = get_parameter_value(
+        component_definition.Parameters,
+        offset_parameter,
+        stiajka_setting("side_offset", default=3.4),
+    )
+    offset_expression = offset_parameter
+    edge_offset_param = cup_edge_offset_param_for_length(length)
+    edge_offset_value = get_parameter_value(component_definition.Parameters, edge_offset_param, 10)
+    point_distances = cup_distances_from_outer_points(
+        component_definition,
+        end_face,
+        reference_edge,
+        length,
+    )
+    if point_distances is None:
+        point_distance_value = int((length - edge_offset_value * 2) / GRID_STEP_CM) * GRID_STEP_CM
+        point_distance_value = max(point_distance_value, GRID_STEP_CM * 2)
+        equal_edge_offset_value = (length - point_distance_value) / 2
+        point1_distance = equal_edge_offset_value
+        point2_distance = equal_edge_offset_value + point_distance_value
+    else:
+        point1_distance, point2_distance = point_distances
+        point_distance_value = abs(point2_distance - point1_distance)
+
+    if point1_distance > point2_distance:
+        point1_distance, point2_distance = point2_distance, point1_distance
+
+    point_distance_expression = None
+
+    line_start = tg.CreatePoint2d(start.X + nx * offset_value, start.Y + ny * offset_value)
+    line_end = tg.CreatePoint2d(end.X + nx * offset_value, end.Y + ny * offset_value)
+    offset_line = sketch.SketchLines.AddByTwoPoints(line_start, line_end)
+    offset_line.Construction = True
+    sketch.GeometricConstraints.AddParallel(offset_line, reference_line)
+
+    anchor_point = offset_line.StartSketchPoint
+
+    point1 = sketch.SketchPoints.Add(
+        tg.CreatePoint2d(
+            start.X + ux * point1_distance + nx * offset_value,
+            start.Y + uy * point1_distance + ny * offset_value,
+        ),
+        False,
+    )
+    point2 = sketch.SketchPoints.Add(
+        tg.CreatePoint2d(
+            start.X + ux * point2_distance + nx * offset_value,
+            start.Y + uy * point2_distance + ny * offset_value,
+        ),
+        False,
+    )
+    for point in (point1, point2):
+        point.HoleCenter = True
+        sketch.GeometricConstraints.AddCoincident(point, offset_line)
+
+    add_stiajka_cup_sketch_dimensions(
+        sketch,
+        tg,
+        component_definition.Parameters,
+        reference_line,
+        offset_line,
+        (point1, point2),
+        point_distance_value,
+        index,
+        offset_expression,
+        point_distance_expression,
+        anchor_point,
+        None,
+    )
+    hide_sketch_dimensions(sketch)
+    print("  created stiajka cup sketch:", sketch.Name)
+    return sketch
+
+
+def create_stiajka_cup_sketches(
+    component_definition,
+    inv,
+    front_faces,
+    end_face,
+):
+    sketches = []
+    for index, front_face in enumerate(front_faces, start=1):
+        sketches.append(
+            create_stiajka_cup_sketch(
+                component_definition,
+                inv,
+                front_face,
+                end_face,
+                index,
+            )
+        )
+
+    return sketches
+
+
 def create_side_sketch(
     component_definition,
     inv,
@@ -1090,21 +1662,45 @@ def create_side_sketch(
 def create_cup_holes(component_definition, inv, side_points):
     cup = stiajka_hole("cup")
     direction = stiajka_direction(cup)
-    return add_holes(
-        component_definition,
-        inv,
-        side_points,
-        cup.get(
-            "diameter_parameter",
-            stiajka_parameter("diameter", "\u0421\u0442\u044f\u0436\u043a\u0430_D"),
-        ),
-        cup.get(
-            "depth_parameter",
-            stiajka_parameter("depth", "\u0421\u0442\u044f\u0436\u043a\u0430_h"),
-        ),
-        direction,
-        cup.get("feature_name", "Stiajka cup"),
+    diameter = cup.get(
+        "diameter_parameter",
+        stiajka_parameter("diameter", "\u0421\u0442\u044f\u0436\u043a\u0430_D"),
     )
+    depth = cup.get(
+        "depth_parameter",
+        stiajka_parameter("depth", "\u0421\u0442\u044f\u0436\u043a\u0430_h"),
+    )
+    feature_name = cup.get("feature_name", "Stiajka cup")
+
+    try:
+        add_holes(
+            component_definition,
+            inv,
+            side_points,
+            diameter,
+            depth,
+            direction,
+            feature_name,
+        )
+        print(f"  created cup feature with points: {len(side_points)}")
+    except Exception as exc:
+        raise RuntimeError(f"cup feature failed for points: {len(side_points)}") from exc
+
+    return 1
+
+
+def cup_hole_center_points(sketch):
+    points = []
+
+    for index in range(1, sketch.SketchPoints.Count + 1):
+        point = sketch.SketchPoints.Item(index)
+        try:
+            if point.HoleCenter:
+                points.append(point)
+        except Exception:
+            continue
+
+    return unique_points(points)
 
 
 def create_hole_batch(
@@ -1175,6 +1771,7 @@ def create_stiajka_features(
     part_document,
     sketches=None,
     colored_faces=None,
+    cup_sketches=None,
     update_document=True,
 ):
     inv = part_document.Parent
@@ -1188,11 +1785,7 @@ def create_stiajka_features(
 
     missing = missing_parameters(
         component_definition.Parameters,
-        (
-            stiajka_parameter("diameter", "\u0421\u0442\u044f\u0436\u043a\u0430_D"),
-            stiajka_parameter("depth", "\u0421\u0442\u044f\u0436\u043a\u0430_h"),
-            stiajka_parameter("offset", "\u0421\u0442\u044f\u0436\u043a\u0430_\u043e\u0442\u0441\u0442\u0443\u043f"),
-        ),
+        stiajka_required_parameter_names(),
     )
     if missing:
         message = "Создайте пользовательские параметры:\n\n" + "\n".join(missing)
@@ -1201,6 +1794,8 @@ def create_stiajka_features(
         return 0
 
     print("Stiajka sketches found:", len(sketches))
+    if cup_sketches is not None:
+        print("Stiajka cup sketches found:", len(cup_sketches))
 
     for sketch in sketches:
         print("Sketch:", sketch.Name)
@@ -1300,6 +1895,9 @@ def create_stiajka_features(
         )
         log_elapsed("normal stiajka batches elapsed", batch_started)
 
+        if cup_sketches is not None:
+            continue
+
         for job in axis_jobs:
             axis_started = perf_counter()
             if not job["outer_main_created"]:
@@ -1320,8 +1918,7 @@ def create_stiajka_features(
 
             solve_sketch(side_sketch)
             try:
-                create_cup_holes(component_definition, inv, side_points)
-                created += 1
+                created += create_cup_holes(component_definition, inv, side_points)
                 cup_created = True
                 print("  created cup")
                 axis_started = log_elapsed("cup elapsed", axis_started)
@@ -1343,13 +1940,26 @@ def create_stiajka_features(
                         raise RuntimeError("fallback side sketch has no points")
 
                     solve_sketch(retry_sketch)
-                    create_cup_holes(component_definition, inv, retry_points)
-                    created += 1
+                    created += create_cup_holes(component_definition, inv, retry_points)
                     cup_created = True
                     print("  created cup after retry")
                     axis_started = log_elapsed("cup retry elapsed", axis_started)
                 except Exception as retry_exc:
                     print("  cup retry failed:", retry_exc)
+
+    if cup_sketches is not None:
+        for cup_sketch in cup_sketches:
+            cup_points = cup_hole_center_points(cup_sketch)
+            print(f"  cup sketch hole centers: {len(cup_points)}")
+            if not cup_points:
+                continue
+
+            try:
+                created += create_cup_holes(component_definition, inv, cup_points)
+                cup_created = True
+                print("  created cup from selected front face")
+            except Exception as exc:
+                print("  selected front face cup failed:", exc)
 
     if update_document or cup_created:
         update_started = perf_counter()

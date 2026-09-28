@@ -13,6 +13,7 @@ DEFAULT_DIMENSION_ORIENTATIONS = {
     "vertical": 19202,
     "aligned": 19203,
 }
+DEFAULT_DRAWER_EDGE_MAX_CM = 60.0
 
 
 @lru_cache(maxsize=1)
@@ -48,4 +49,12 @@ def dimension_orientation(name):
         "dimension_orientation",
         name,
         default=DEFAULT_DIMENSION_ORIENTATIONS.get(name),
+    )
+
+
+def drawer_edge_max_cm():
+    return setting(
+        "drilling",
+        "drawer_edge_max_cm",
+        default=DEFAULT_DRAWER_EDGE_MAX_CM,
     )

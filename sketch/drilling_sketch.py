@@ -15,15 +15,14 @@ from common.sketch_geometry import (
     sketch_lines_for_face,
     unique_parameter_name,
 )
-
-FRAME_EDGE_THRESHOLD_CM = 40.0
+from common.settings import drawer_edge_max_cm
 
 
 def edge_offset_param_for_length(long_edge_length):
-    if long_edge_length > FRAME_EDGE_THRESHOLD_CM:
-        return EDGE_OFFSET_FRAME_PARAM
+    if long_edge_length <= drawer_edge_max_cm():
+        return EDGE_OFFSET_DRAWER_PARAM
 
-    return EDGE_OFFSET_DRAWER_PARAM
+    return EDGE_OFFSET_FRAME_PARAM
 
 
 def create_construction_axes(sk, tg, short1, short2):
@@ -158,7 +157,9 @@ def create_drilling_sketch(sk, face, index, inv, comp, edge_offset_param=EDGE_OF
     short1, short2 = sorted(lines, key=line_length2)[:2]
     axes = create_construction_axes(sk, tg, short1, short2)
     _, _, center, long_edge_length, ux, uy, _, _ = axes
-    if edge_offset_param is None:
+    if callable(edge_offset_param):
+        edge_offset_param = edge_offset_param(long_edge_length)
+    elif edge_offset_param is None:
         edge_offset_param = edge_offset_param_for_length(long_edge_length)
 
     edge_offset_value = get_parameter_value(comp.Parameters, edge_offset_param, 10)

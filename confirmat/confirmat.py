@@ -1,11 +1,11 @@
-from common.constants import DRILLING_SKETCH_PREFIX
+from common.constants import DRILLING_SKETCH_PREFIX, FRAME_THICKNESS_PARAM
 from common.face_utils import (
     get_red_faces,
     get_yellow_faces,
     reset_faces_to_feature_appearance,
 )
 from common.settings import hole_direction, setting
-from common.sketch_geometry import distance
+from common.sketch_geometry import distance, get_parameter_value
 
 FEATURE_NAME_COUNTERS = {}
 
@@ -22,6 +22,10 @@ def confirmat_direction(name):
     return hole_direction(name)
 
 
+def confirmat_hole_direction(hole_settings, default):
+    return confirmat_direction(hole_settings.get("direction", default))
+
+
 def log(*args):
     if confirmat_setting("debug", default=False):
         print(*args)
@@ -34,13 +38,14 @@ def find_confirmat_sketches(component_definition):
 
 def find_confirmat_sketches_on_faces(component_definition, faces, label):
     sketches = []
+    plane_offsets = sketch_plane_offsets(component_definition)
 
     for index in range(1, component_definition.Sketches.Count + 1):
         sketch = component_definition.Sketches.Item(index)
         is_ours = is_generated_drilling_sketch(sketch) or has_drilling_dimensions(
             sketch
         )
-        if is_ours and sketch_on_face_plane(sketch, faces):
+        if is_ours and sketch_on_face_plane(sketch, faces, plane_offsets):
             log(f"Selected {label} confirmat sketch:", sketch.Name)
             sketches.append(sketch)
 
@@ -58,15 +63,29 @@ def sketch_on_red_face_plane(sketch, red_faces):
     return sketch_on_face_plane(sketch, red_faces)
 
 
-def sketch_on_face_plane(sketch, faces):
+def sketch_plane_offsets(component_definition):
+    offset = get_parameter_value(component_definition.Parameters, FRAME_THICKNESS_PARAM, 0)
+    offsets = [0]
+
+    try:
+        if abs(offset) > 0.001:
+            offsets.append(offset)
+    except Exception:
+        pass
+
+    return offsets
+
+
+def sketch_on_face_plane(sketch, faces, offsets=None):
     try:
         sketch_plane = sketch.PlanarEntity
     except Exception:
         return False
 
+    offsets = offsets or [0]
     for face in faces:
         try:
-            if same_plane_entity(sketch_plane, face):
+            if same_plane_entity(sketch_plane, face, offsets):
                 return True
         except Exception:
             continue
@@ -78,16 +97,17 @@ def red_faces_on_sketch_plane(sketch, red_faces):
     return faces_on_sketch_plane(sketch, red_faces)
 
 
-def faces_on_sketch_plane(sketch, faces):
+def faces_on_sketch_plane(sketch, faces, offsets=None):
     try:
         sketch_plane = sketch.PlanarEntity
     except Exception:
         return []
 
+    offsets = offsets or [0]
     result = []
     for face in faces:
         try:
-            if same_plane_entity(sketch_plane, face):
+            if same_plane_entity(sketch_plane, face, offsets):
                 result.append(face)
         except Exception:
             continue
@@ -95,7 +115,7 @@ def faces_on_sketch_plane(sketch, faces):
     return result
 
 
-def same_plane_entity(entity1, entity2, tol=0.001):
+def same_plane_entity(entity1, entity2, offsets=None, tol=0.001):
     g1 = plane_geometry(entity1)
     g2 = plane_geometry(entity2)
     n1 = g1.Normal
@@ -104,7 +124,18 @@ def same_plane_entity(entity1, entity2, tol=0.001):
     p2 = g2.RootPoint
     dot = n1.X * n2.X + n1.Y * n2.Y + n1.Z * n2.Z
     dist = (p2.X - p1.X) * n1.X + (p2.Y - p1.Y) * n1.Y + (p2.Z - p1.Z) * n1.Z
-    return abs(abs(dot) - 1) <= tol and abs(dist) < tol
+
+    if abs(abs(dot) - 1) > tol:
+        return False
+
+    for offset in offsets or [0]:
+        try:
+            if abs(abs(dist) - abs(offset)) <= tol:
+                return True
+        except Exception:
+            continue
+
+    return False
 
 
 def plane_geometry(entity):
@@ -434,11 +465,85 @@ def add_holes(component_definition, inv, points, diameter, depth, direction, nam
         True,
     )
     try:
-        feature.Name = fast_feature_name(name)
+        feature.Name = unique_feature_name(hole_features, name)
     except Exception:
         pass
     set_all_bodies_affected(feature, component_definition, inv)
     return feature
+
+
+def add_counterbore_holes(
+    component_definition,
+    inv,
+    points,
+    hole_diameter,
+    hole_depth,
+    direction,
+    cbore_diameter,
+    cbore_depth,
+    name,
+):
+    print(
+        f"  creating counterbore hole feature: {name}, points={len(points)}, "
+        f"hole_diameter={hole_diameter}, hole_depth={hole_depth}, "
+        f"cbore_diameter={cbore_diameter}, cbore_depth={cbore_depth}, "
+        f"direction={direction}",
+        flush=True,
+    )
+    mark_as_hole_centers(points)
+    hole_features = component_definition.Features.HoleFeatures
+    placement = hole_features.CreateSketchPlacementDefinition(
+        object_collection(inv, points)
+    )
+
+    try:
+        feature = hole_features.AddCBoreByDistanceExtent2(
+            placement,
+            hole_diameter,
+            hole_depth,
+            direction,
+            cbore_diameter,
+            cbore_depth,
+        )
+    except Exception:
+        feature = hole_features.AddCBoreByDistanceExtent(
+            placement,
+            hole_diameter,
+            hole_depth,
+            direction,
+            cbore_diameter,
+            cbore_depth,
+            True,
+        )
+
+    try:
+        feature.Name = unique_feature_name(hole_features, name)
+    except Exception:
+        pass
+    set_all_bodies_affected(feature, component_definition, inv)
+    return feature
+
+
+def add_confirmat_counterbore(
+    component_definition,
+    inv,
+    points,
+    outer,
+    inner,
+    default_name,
+    direction=None,
+):
+    return add_counterbore_holes(
+        component_definition,
+        inv,
+        points,
+        inner.get("diameter", "M_Конфирмат_D_вТорец"),
+        inner.get("depth", "M_Конфирмат_глубина"),
+        direction if direction is not None else confirmat_hole_direction(outer, "positive"),
+        outer.get("diameter", "M_Конфирмат_D_вПласть"),
+        outer.get("depth", FRAME_THICKNESS_PARAM),
+        outer.get("feature_name", default_name),
+    )
 
 
 def try_share_sketch(sketch):
@@ -478,7 +583,13 @@ def confirmat_points_for_sketch(sketch, faces, include_center=True, face_label="
     return unique_points(sketch_points)
 
 
-def create_confirmat_features(part_document, sketches=None, faces=None, face_label="red"):
+def create_confirmat_features(
+    part_document,
+    sketches=None,
+    faces=None,
+    face_label="red",
+    direction=None,
+):
     inv = part_document.Parent
     component_definition = part_document.ComponentDefinition
     colored_faces = faces or get_red_faces(component_definition)
@@ -488,8 +599,8 @@ def create_confirmat_features(part_document, sketches=None, faces=None, face_lab
         colored_faces,
         face_label,
     )
-    outer = confirmat_hole("outer")
-    inner = confirmat_hole("inner")
+    outer = confirmat_hole("outer_3pcs") or confirmat_hole("outer")
+    inner = confirmat_hole("inner_3pcs") or confirmat_hole("inner")
     created = 0
     print("Confirmat sketches found:", len(sketches))
 
@@ -503,7 +614,11 @@ def create_confirmat_features(part_document, sketches=None, faces=None, face_lab
         )
         try_share_sketch(sketch)
 
-        sketch_colored_faces = faces_on_sketch_plane(sketch, colored_faces)
+        sketch_colored_faces = faces_on_sketch_plane(
+            sketch,
+            colored_faces,
+            sketch_plane_offsets(component_definition),
+        )
         print(f"  {face_label} faces on sketch plane:", len(sketch_colored_faces))
 
         sketch_points = confirmat_points_for_sketch(
@@ -516,36 +631,20 @@ def create_confirmat_features(part_document, sketches=None, faces=None, face_lab
             continue
 
         try:
-            add_holes(
+            add_confirmat_counterbore(
                 component_definition,
                 inv,
                 sketch_points,
-                outer.get("diameter", "5 mm"),
-                outer.get("depth", "20 mm"),
-                confirmat_direction("negative"),
-                "Confirmat 5mm inward",
+                outer,
+                inner,
+                "Confirmat counterbore",
+                direction=direction,
             )
             created += 1
             try_share_sketch(sketch)
-            print("  created 5mm inward")
+            print("  created confirmat counterbore")
         except Exception as exc:
-            print("  5mm inward failed:", exc)
-
-        try:
-            add_holes(
-                component_definition,
-                inv,
-                sketch_points,
-                inner.get("diameter", "3 mm"),
-                inner.get("depth", "35 mm"),
-                confirmat_direction("positive"),
-                "Confirmat 3mm outward",
-            )
-            created += 1
-            try_share_sketch(sketch)
-            print("  created 3mm outward")
-        except Exception as exc:
-            print("  3mm outward failed:", exc)
+            print("  confirmat counterbore failed:", exc)
 
     if faces is None:
         colored_faces_after = get_red_faces(component_definition)
@@ -561,7 +660,13 @@ def create_confirmat_features(part_document, sketches=None, faces=None, face_lab
     return created
 
 
-def create_confirmat_2_features(part_document, sketches=None, faces=None, face_label="yellow"):
+def create_confirmat_2_features(
+    part_document,
+    sketches=None,
+    faces=None,
+    face_label="yellow",
+    direction=None,
+):
     inv = part_document.Parent
     component_definition = part_document.ComponentDefinition
     colored_faces = faces or get_yellow_faces(component_definition)
@@ -571,8 +676,8 @@ def create_confirmat_2_features(part_document, sketches=None, faces=None, face_l
         colored_faces,
         face_label,
     )
-    outer = confirmat_hole("outer")
-    inner = confirmat_hole("inner")
+    outer = confirmat_hole("outer_2pcs") or confirmat_hole("outer")
+    inner = confirmat_hole("inner_2pcs") or confirmat_hole("inner")
     created = 0
     print("Confirmat 2pcs sketches found:", len(sketches))
 
@@ -586,7 +691,11 @@ def create_confirmat_2_features(part_document, sketches=None, faces=None, face_l
         )
         try_share_sketch(sketch)
 
-        sketch_colored_faces = faces_on_sketch_plane(sketch, colored_faces)
+        sketch_colored_faces = faces_on_sketch_plane(
+            sketch,
+            colored_faces,
+            sketch_plane_offsets(component_definition),
+        )
         print(f"  {face_label} faces on sketch plane:", len(sketch_colored_faces))
 
         sketch_points = confirmat_points_for_sketch(
@@ -600,36 +709,20 @@ def create_confirmat_2_features(part_document, sketches=None, faces=None, face_l
             continue
 
         try:
-            add_holes(
+            add_confirmat_counterbore(
                 component_definition,
                 inv,
                 sketch_points,
-                outer.get("diameter", "5 mm"),
-                outer.get("depth", "20 mm"),
-                confirmat_direction("negative"),
-                "Confirmat 2pcs 5mm inward",
+                outer,
+                inner,
+                "Confirmat 2pcs counterbore",
+                direction=direction,
             )
             created += 1
             try_share_sketch(sketch)
-            print("  created 2pcs 5mm inward")
+            print("  created 2pcs counterbore")
         except Exception as exc:
-            print("  2pcs 5mm inward failed:", exc)
-
-        try:
-            add_holes(
-                component_definition,
-                inv,
-                sketch_points,
-                inner.get("diameter", "3 mm"),
-                inner.get("depth", "35 mm"),
-                confirmat_direction("positive"),
-                "Confirmat 2pcs 3mm outward",
-            )
-            created += 1
-            try_share_sketch(sketch)
-            print("  created 2pcs 3mm outward")
-        except Exception as exc:
-            print("  2pcs 3mm outward failed:", exc)
+            print("  2pcs counterbore failed:", exc)
 
     if faces is None:
         colored_faces_after = get_yellow_faces(component_definition)
