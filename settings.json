@@ -51,7 +51,7 @@
   "stiajka": {
     "parameters": {
       "diameter": "Стяжка_D",
-      "depth": "Стяжка_резьбыШтока_Петля_h",
+      "depth": "Стяжкаh_резьбаШтока_Петля",
       "offset": "Стяжка_отступ"
     },
     "side_offset": 3.4,
@@ -63,7 +63,7 @@
     },
     "outer_secondary": {
       "diameter": "Стяжка_D_резьбыШтока",
-      "depth": "Стяжка_резьбыШтока_Петля_h",
+      "depth": "Стяжкаh_резьбаШтока_Петля",
       "direction": "negative",
       "feature_name": "Stiajka outer 5x13"
     },
@@ -81,7 +81,7 @@
     },
     "cup": {
       "diameter_parameter": "Стяжка_D",
-      "depth_parameter": "Стяжка_резьбыШтока_Петля_h",
+      "depth_parameter": "Стяжкаh_резьбаШтока_Петля",
       "direction": "positive",
       "feature_name": "Stiajka cup"
     }

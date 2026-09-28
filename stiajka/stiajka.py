@@ -29,6 +29,7 @@ from common.sketch_geometry import (
     get_parameter_value,
     hide_sketch_dimensions,
     project_face_edges,
+    sketch_has_geometry_for_face,
     unique_parameter_name,
 )
 from confirmat.confirmat import same_plane_entity
@@ -195,23 +196,58 @@ def face_area(face):
         return 0
 
 
+def faces_area(faces):
+    return sum(face_area(face) for face in faces)
+
+
+def adjacent_face_count(faces, other_faces):
+    count = 0
+
+    for face in faces:
+        for other_face in other_faces:
+            if shared_face_edge(face, other_face) is not None:
+                count += 1
+                break
+
+    return count
+
+
 def split_stiajka_faces(faces):
     groups = group_faces_by_plane(faces)
-    if len(groups) != 2:
+    if len(groups) < 2:
         return None, None
 
-    ordered = sorted(groups, key=lambda group: sum(face_area(face) for face in group))
-    end_faces = ordered[0]
-    front_faces = ordered[1]
+    end_group_index, end_faces = max(
+        enumerate(groups),
+        key=lambda item: (
+            adjacent_face_count(
+                item[1],
+                [
+                    face
+                    for group_index, group in enumerate(groups)
+                    if group_index != item[0]
+                    for face in group
+                ],
+            ),
+            -faces_area(item[1]),
+        ),
+    )
+    front_faces = [
+        face
+        for group_index, group in enumerate(groups)
+        if group_index != end_group_index
+        for face in group
+    ]
     print(
         "Stiajka end plane:",
         f"faces={len(end_faces)}",
-        f"area={sum(face_area(face) for face in end_faces):.4f}",
+        f"area={faces_area(end_faces):.4f}",
     )
     print(
-        "Stiajka front plane:",
+        "Stiajka front planes:",
+        f"planes={len(groups) - 1}",
         f"faces={len(front_faces)}",
-        f"area={sum(face_area(face) for face in front_faces):.4f}",
+        f"area={faces_area(front_faces):.4f}",
     )
 
     return end_faces, front_faces
@@ -229,23 +265,45 @@ def matching_end_face(front_face, end_faces):
     return max(candidates, key=face_area)
 
 
-def create_selected_cup_sketches(comp, inv, front_faces, end_faces):
+def cup_sketch_on_face_plane(sketches, face):
+    for sketch in sketches:
+        try:
+            if same_plane_entity(sketch.PlanarEntity, face):
+                return sketch
+        except Exception:
+            continue
+
+    return None
+
+
+def create_selected_cup_sketches(comp, inv, front_faces, end_faces, reuse_existing=True):
     sketches = []
+    sketch_names = set()
+
     for index, front_face in enumerate(front_faces, start=1):
         end_face = matching_end_face(front_face, end_faces)
         if end_face is None:
             print(f"  front face {index}: no shared end face, skipped")
             continue
 
-        sketches.append(
-            create_stiajka_cup_sketch(
-                comp,
-                inv,
-                front_face,
-                end_face,
-                index,
-            )
+        sketch = cup_sketch_on_face_plane(sketches, front_face)
+        sketch = create_stiajka_cup_sketch(
+            comp,
+            inv,
+            front_face,
+            end_face,
+            index,
+            sketch=sketch,
+            reuse_existing=reuse_existing,
         )
+        try:
+            sketch_name = sketch.Name
+        except Exception:
+            sketch_name = id(sketch)
+
+        if sketch_name not in sketch_names:
+            sketch_names.add(sketch_name)
+            sketches.append(sketch)
 
     return sketches
 
@@ -1365,30 +1423,11 @@ def add_stiajka_cup_sketch_dimensions(
         )
 
 
-def delete_sketch_collection_items(collection):
+def cup_sketch_has_face_geometry(sketch, face):
     try:
-        count = collection.Count
+        return sketch_has_geometry_for_face(sketch, face)
     except Exception:
-        return
-
-    for index in range(count, 0, -1):
-        try:
-            collection.Item(index).Delete()
-        except Exception:
-            continue
-
-
-def clear_stiajka_cup_sketch(sketch):
-    for collection_name in (
-        "DimensionConstraints",
-        "GeometricConstraints",
-        "SketchLines",
-        "SketchPoints",
-    ):
-        try:
-            delete_sketch_collection_items(getattr(sketch, collection_name))
-        except Exception:
-            continue
+        return False
 
 
 def create_stiajka_cup_sketch(
@@ -1397,12 +1436,15 @@ def create_stiajka_cup_sketch(
     front_face,
     end_face,
     index=1,
+    sketch=None,
+    reuse_existing=True,
 ):
-    sketch = sketch_on_face_plane(
-        component_definition.Sketches,
-        front_face,
-        STIAJKA_CUP_SKETCH_PREFIX,
-    )
+    if sketch is None and reuse_existing:
+        sketch = sketch_on_face_plane(
+            component_definition.Sketches,
+            front_face,
+            STIAJKA_CUP_SKETCH_PREFIX,
+        )
     if sketch is None:
         sketch = component_definition.Sketches.Add(front_face)
         sketch.Name = unique_sketch_name(
@@ -1411,7 +1453,9 @@ def create_stiajka_cup_sketch(
         )
     else:
         print("Using existing stiajka cup sketch:", sketch.Name)
-        clear_stiajka_cup_sketch(sketch)
+        if cup_sketch_has_face_geometry(sketch, front_face):
+            print("  stiajka cup face geometry already exists, skipped")
+            return sketch
 
     set_sketch_color_rgb(
         sketch,
@@ -1781,7 +1825,6 @@ def create_stiajka_features(
     if colored_faces is None:
         colored_faces = get_blue_faces(component_definition)
     created = 0
-    cup_created = False
 
     missing = missing_parameters(
         component_definition.Parameters,
@@ -1919,7 +1962,6 @@ def create_stiajka_features(
             solve_sketch(side_sketch)
             try:
                 created += create_cup_holes(component_definition, inv, side_points)
-                cup_created = True
                 print("  created cup")
                 axis_started = log_elapsed("cup elapsed", axis_started)
             except Exception as exc:
@@ -1941,7 +1983,6 @@ def create_stiajka_features(
 
                     solve_sketch(retry_sketch)
                     created += create_cup_holes(component_definition, inv, retry_points)
-                    cup_created = True
                     print("  created cup after retry")
                     axis_started = log_elapsed("cup retry elapsed", axis_started)
                 except Exception as retry_exc:
@@ -1956,12 +1997,11 @@ def create_stiajka_features(
 
             try:
                 created += create_cup_holes(component_definition, inv, cup_points)
-                cup_created = True
                 print("  created cup from selected front face")
             except Exception as exc:
                 print("  selected front face cup failed:", exc)
 
-    if update_document or cup_created:
+    if update_document:
         update_started = perf_counter()
         part_document.Update()
         log_elapsed("document update elapsed", update_started)

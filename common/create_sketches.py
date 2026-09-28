@@ -90,6 +90,7 @@ def create_sketches_for_faces(
     edge_offset_param,
     sketch_label,
     face_label,
+    reuse_existing=True,
 ):
     comp = doc.ComponentDefinition
     groups = group_faces_by_plane(faces)
@@ -101,17 +102,14 @@ def create_sketches_for_faces(
     created_sketches = 0
     reused_sketches = 0
     skipped_faces = 0
+    sketches = []
 
     for group_index, group in enumerate(groups, start=1):
-        sketch = sketch_on_face_plane(comp.Sketches, group[0], sketch_prefix)
+        sketch = None
+        if reuse_existing:
+            sketch = sketch_on_face_plane(comp.Sketches, group[0], sketch_prefix)
         if sketch is None:
             sketch = comp.Sketches.Add(group[0])
-            set_sketch_color_rgb(
-                sketch,
-                SKETCH_YELLOW_RGB,
-                inv.TransientObjects,
-                include_entities=False,
-            )
             sketch.Name = unique_sketch_name(
                 comp.Sketches,
                 f"{sketch_prefix}_{group_index}",
@@ -120,6 +118,8 @@ def create_sketches_for_faces(
         else:
             reused_sketches += 1
             print(f"Using existing {sketch_label} sketch on plane:", sketch.Name)
+
+        sketches.append(sketch)
 
         if set_sketch_color_rgb(
             sketch,
@@ -131,6 +131,7 @@ def create_sketches_for_faces(
         else:
             print(f"  {sketch_label} sketch color not set:", sketch.Name)
 
+        group_processed = 0
         with sketch_updates_deferred(sketch):
             for face in group:
                 if sketch_has_geometry_for_face(sketch, face):
@@ -147,8 +148,10 @@ def create_sketches_for_faces(
                     edge_offset_param,
                 ):
                     count += 1
+                    group_processed += 1
 
-        hide_sketch_dimensions(sketch)
+        if group_processed:
+            hide_sketch_dimensions(sketch)
 
     print(f"{sketch_label} faces processed:", count)
     print(f"{sketch_label} sketches created:", created_sketches)
@@ -160,4 +163,5 @@ def create_sketches_for_faces(
         "created_sketches": created_sketches,
         "reused_sketches": reused_sketches,
         "skipped_faces": skipped_faces,
+        "sketches": sketches,
     }

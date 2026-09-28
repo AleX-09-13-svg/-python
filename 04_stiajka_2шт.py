@@ -12,7 +12,6 @@ from stiajka.stiajka import (
     cup_edge_offset_param_for_length,
     create_selected_cup_sketches,
     create_stiajka_features,
-    find_stiajka_sketches_on_faces,
     split_stiajka_faces,
     stiajka_required_parameter_names,
 )
@@ -37,10 +36,10 @@ def main():
     started = log_elapsed("Selected context", started)
     end_faces, front_faces = split_stiajka_faces(faces)
     if not end_faces:
-        print("Select faces from exactly two planes: end plane and front plane.")
+        print("Select end faces in one plane and one or more front faces.")
         return
 
-    create_sketches_for_faces(
+    sketch_result = create_sketches_for_faces(
         doc.Parent,
         doc,
         end_faces,
@@ -48,6 +47,7 @@ def main():
         cup_edge_offset_param_for_length,
         "Drilling",
         "Selected end drilling",
+        reuse_existing=False,
     )
     started = log_elapsed("Create sketches", started)
 
@@ -56,18 +56,18 @@ def main():
         doc.Parent,
         front_faces,
         end_faces,
+        reuse_existing=False,
     )
     started = log_elapsed("Create cup sketches", started)
 
-    sketches = find_stiajka_sketches_on_faces(comp, end_faces, DRILLING_SKETCH_PREFIX)
-    started = log_elapsed("Find stiajka sketches", started)
+    sketches = sketch_result["sketches"]
     print("Selected stiajka sketches found:", len(sketches))
     created = create_stiajka_features(
         doc,
         sketches=sketches,
         colored_faces=end_faces,
         cup_sketches=cup_sketches,
-        update_document=True,
+        update_document=False,
     )
     started = log_elapsed("Create stiajka features", started)
 
