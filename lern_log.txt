@@ -1,0 +1,28 @@
+Script started
+Step 1: connect to Inventor
+Step 2: read active part document
+Active document: Проба.ipt
+DocumentType: 12290
+Step 3: read selected face
+Selected objects: 1
+Face vertices: 4
+Preferred direction: negative (INVERT_HOLE_DIRECTION=False)
+Attempt 1: direction=negative, volume_before=23465.1427044881
+Step 4: create sketch on selected face
+Step 5: calculate face center
+RangeBox center failed, falling back to vertices: '<win32com.gen_py.Autodesk Inventor Object Library.Face instance at 0x2286593702080>' object has no attribute 'RangeBox'
+Step 6: add hole center point
+Step 7: solve sketch
+Step 8: create drilled hole, direction=negative
+Attempt 1: volume_after=23465.1427044881, volume_dropped=False
+Hole did not remove material. Trying opposite direction.
+Sketch delete skipped: (-2147352567, 'Ошибка.', (0, None, None, None, 0, -2147467259), None)
+Attempt 2: direction=positive, volume_before=23465.1427044881
+Step 4: create sketch on selected face
+Step 5: calculate face center
+RangeBox center failed, falling back to vertices: '<win32com.gen_py.Autodesk Inventor Object Library.Face instance at 0x2286593702080>' object has no attribute 'RangeBox'
+Step 6: add hole center point
+Step 7: solve sketch
+Step 8: create drilled hole, direction=positive
+Attempt 2: volume_after=23464.94635494725, volume_dropped=True
+Done. Final direction: positive
