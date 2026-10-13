@@ -12,20 +12,16 @@ from tkinter.scrolledtext import ScrolledText
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 COMMANDS = {
-    "sketches": ("Create sketches", "00_createSketches.py"),
     "stiajka": ("Stiajka 2pcs", "04_stiajka_2\u0448\u0442.py"),
-    "confirmat2": ("Confirmat 2pcs Bok16", "02_confirmat_2\u0448\u0442_Bok16.py"),
-    "confirmat3": ("Confirmat 3pcs Bok16", "03_confirmat_3\u0448\u0442_Bok16.py"),
-    "confirmat2_bok16": ("Confirmat 2pcs Bok16", "02_confirmat_2\u0448\u0442_Bok16.py"),
-    "confirmat3_bok16": ("Confirmat 3pcs Bok16", "03_confirmat_3\u0448\u0442_Bok16.py"),
-    "confirmat2_bok17": ("Confirmat 2pcs Bok17", "22_confirmat_2\u0448\u0442_Bok17.py"),
-    "confirmat3_bok17": ("Confirmat 3pcs Bok17", "33_confirmat_3\u0448\u0442_Bok17.py"),
+    "confirmat2": ("Confirmat", "02_confirmat_2\u0448\u0442_Bok16.py"),
+    "confirmat2_bok16": ("Confirmat", "02_confirmat_2\u0448\u0442_Bok16.py"),
 }
 
 
 class LauncherWindow:
-    def __init__(self, command_name: str):
+    def __init__(self, command_name: str, extra_args: list[str] | None = None):
         self.command_name = command_name
+        self.extra_args = extra_args or []
         self.output_queue: queue.Queue[str | None] = queue.Queue()
         self.process: subprocess.Popen[str] | None = None
 
@@ -72,7 +68,7 @@ class LauncherWindow:
         self.output_queue.put(f"Script: {script_path}\n\n")
 
         self.process = subprocess.Popen(
-            [sys.executable, str(script_path)],
+            [sys.executable, str(script_path), *self.extra_args],
             cwd=PROJECT_ROOT,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -106,8 +102,8 @@ class LauncherWindow:
 
 
 def main() -> int:
-    command_name = sys.argv[1] if len(sys.argv) > 1 else "sketches"
-    LauncherWindow(command_name).start()
+    command_name = sys.argv[1] if len(sys.argv) > 1 else "confirmat2"
+    LauncherWindow(command_name, sys.argv[2:]).start()
     return 0
 
 
