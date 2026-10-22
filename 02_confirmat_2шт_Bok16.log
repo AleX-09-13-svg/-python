@@ -1,14 +1,14 @@
 Running: 02_confirmat_2шт_Bok16.py
 Log: D:\Копия Google диска\02_Скрипты\01_Скрипты для работы\Присадка кодом Python\02_confirmat_2шт_Bok16.log
-Selected objects: 2
-Selected Confirmat 2pcs faces: 2
-Material thickness parameter: Толщина_каркаса_МДФ
-Frame edge offset parameter: Желаемый_отступ_присадки_каркаса1_стяжка
-Confirmat count parameter: Кол_конф
-Confirmat count: 3
-Selected drilling faces: 2
+Selected objects: 1
+Selected Confirmat 2pcs faces: 1
+Material thickness parameter: ПД_толщина_каркаса
+Frame edge offset parameter: ПД_отступ_присадки_от_кромки1
+Confirmat count parameter: ПД_количество_конфирматов_В1
+Confirmat count: 2
+Selected drilling faces: 1
 Drilling sketch planes: 1
-  creating offset sketch plane: DrillingSketch_OffsetPlane_1, offset=Толщина_каркаса_МДФ (1.6)
+  creating offset sketch plane: DrillingSketch_OffsetPlane_1, offset=ПД_толщина_каркаса (1.6)
   Drilling sketch color set: DrillingSketch_1
   face state: has_geometry=False, has_drilling_axes=False
   build drilling geometry: sketch=DrillingSketch_1, project_edges=True
@@ -16,37 +16,26 @@ Drilling sketch planes: 1
     lines after projection: 4
     new face lines found: 4
     short edge lengths: 1.6 1.6
-    long edge length: 64.8653
-    edge offset: Желаемый_отступ_присадки_каркаса1_стяжка = 20.0
-    point distance: 22.4
+    long edge length: 30.0
+    edge offset: ПД_отступ_присадки_от_кромки1 = 6.0
+    point distance: 16.0
     drilling geometry created
-  face state: has_geometry=False, has_drilling_axes=True
-  build drilling geometry: sketch=DrillingSketch_1, project_edges=True
-    lines before projection: 7
-    lines after projection: 11
-    new face lines found: 4
-    short edge lengths: 1.6 1.6
-    long edge length: 64.8653
-    edge offset: Желаемый_отступ_присадки_каркаса1_стяжка = 20.0
-    point distance: 22.4
-    drilling geometry created
-Drilling faces processed: 2
+Drilling faces processed: 1
 Drilling sketches created: 1
 Drilling sketches reused: 0
 Drilling faces skipped: 0
 Confirmat edge/center sketches found: 1
 Sketch: DrillingSketch_1
-  sketch lines/points/dims: 14 30 6
-  selected faces on sketch plane: 2
+  sketch lines/points/dims: 7 15 3
+  selected faces on sketch plane: 1
   face 1 confirmat points: 3
-  face 2 confirmat points: 3
-Total edge confirmat points: 4
-Total center confirmat points: 2
-  creating counterbore hole feature: Confirmat 2pcs counterbore, points=4, hole_diameter=M_Конфирмат_D_вТорец, hole_depth=M_Конфирмат_глубина, cbore_diameter=M_Конфирмат_D_вПласть, cbore_depth=Толщина_каркаса_МДФ, direction=positive
+Total edge confirmat points: 2
+Total center confirmat points: 1
+  creating counterbore hole feature: Confirmat 2pcs counterbore, points=2, hole_diameter=M_Конфирмат_D_вТорец, hole_depth=M_Конфирмат_глубина, cbore_diameter=M_Конфирмат_D_вПласть, cbore_depth=ПД_толщина_каркаса, direction=positive
   created one edge confirmat feature for all edge points
-  creating counterbore hole feature: Confirmat counterbore, points=2, hole_diameter=M_Конфирмат_D_вТорец, hole_depth=M_Конфирмат_глубина, cbore_diameter=M_Конфирмат_D_вПласть, cbore_depth=Толщина_каркаса_МДФ, direction=positive
-  center feature suppression condition: Кол_конф == 2
+  creating counterbore hole feature: Confirmat counterbore, points=1, hole_diameter=M_Конфирмат_D_вТорец, hole_depth=M_Конфирмат_глубина, cbore_diameter=M_Конфирмат_D_вПласть, cbore_depth=ПД_толщина_каркаса, direction=positive
+  center feature suppression condition: ПД_количество_конфирматов_В1 == 2
   created one center confirmat feature for all center points
 Selected faces appearance reset skipped
-Confirmat 3pcs sketches hidden: 1
-Confirmat 3pcs hole features created: 2
+Confirmat 2pcs sketches hidden: 1
+Confirmat 2pcs hole features created: 2

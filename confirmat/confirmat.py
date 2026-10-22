@@ -4,8 +4,8 @@ from common.constants import FRAME_THICKNESS_PARAM as DEFAULT_FRAME_THICKNESS_PA
 
 ensure_inventor_service_path()
 
-from inventor_service import confirmat as _confirmat
 from inventor_service.settings import configure_settings
+from workflows import confirmat as _confirmat
 
 
 FRAME_THICKNESS_PARAM = getattr(

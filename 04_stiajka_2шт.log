@@ -1,21 +1,14 @@
 Running: 04_stiajka_2шт.py
 Log: D:\Копия Google диска\02_Скрипты\01_Скрипты для работы\Присадка кодом Python\04_stiajka_2шт.log
-Selected objects: 4
-Selected Stiajka 2pcs faces: 4
-Frame edge offset parameter: Желаемый_отступ_присадки_каркаса1_стяжка
-Selected context: 5.58s
-Selected body group 1:
-Selected face 1 area: 103.7845
-Selected face 2 area: 4089.5914
-Using first selected face area: 103.7845
-Using second selected face area: 4089.5914
-Selected body group 2:
-Selected face 1 area: 103.7845
-Selected face 2 area: 4089.5914
-Using first selected face area: 103.7845
-Using second selected face area: 4089.5914
-Selected stiajka body pairs: 2
-Selected first face drilling faces: 2
+Selected objects: 2
+Selected Stiajka 2pcs faces: 2
+Frame edge offset parameter: ПД_отступ_присадки_от_кромки
+Selected context: 6.06s
+Selected face 1 area: 48.0000
+Selected face 2 area: 1500.0000
+Using first selected face area: 48.0000
+Using second selected face area: 1500.0000
+Selected first face drilling faces: 1
 Drilling sketch planes: 1
   Drilling sketch color set: DrillingSketch_1
   face state: has_geometry=False, has_drilling_axes=False
@@ -24,49 +17,36 @@ Drilling sketch planes: 1
     lines after projection: 4
     new face lines found: 4
     short edge lengths: 1.6 1.6
-    long edge length: 64.8653
-    edge offset: Желаемый_отступ_присадки_каркаса1_стяжка = 20.0
-    point distance: 22.4
+    long edge length: 30.0
+    edge offset: ПД_отступ_присадки_от_кромки = 5.0
+    point distance: 19.2
     drilling geometry created
-  face state: has_geometry=False, has_drilling_axes=True
-  build drilling geometry: sketch=DrillingSketch_1, project_edges=True
-    lines before projection: 7
-    lines after projection: 11
-    new face lines found: 4
-    short edge lengths: 1.6 1.6
-    long edge length: 64.8653
-    edge offset: Желаемый_отступ_присадки_каркаса1_стяжка = 20.0
-    point distance: 22.4
-    drilling geometry created
-Drilling faces processed: 2
+Drilling faces processed: 1
 Drilling sketches created: 1
 Drilling sketches reused: 0
 Drilling faces skipped: 0
-Create first sketch: 14.02s
+Create first sketch: 6.77s
 Stiajka sketches found: 1
 Sketch: DrillingSketch_1
-  colored faces on sketch plane: 2
-  construction axes: 2
-  created outer 8x34 batch, points=4
-  outer 8x34 batch elapsed: 0.56s
-  created outer 5x13 batch, points=4
-  outer 5x13 batch elapsed: 0.63s
-  created inner 8x10 batch, points=4
-  inner 8x10 batch elapsed: 0.71s
-  created inner 8x20 batch, points=4
-  inner 8x20 batch elapsed: 0.67s
+  colored faces on sketch plane: 1
+  construction axes: 1
+  created outer 8x34 batch, points=2
+  outer 8x34 batch elapsed: 0.52s
+  created outer 5x13 batch, points=2
+  outer 5x13 batch elapsed: 0.47s
+  created inner 8x10 batch, points=2
+  inner 8x10 batch elapsed: 0.46s
+  created inner 8x20 batch, points=2
+  inner 8x20 batch elapsed: 0.45s
   document update skipped
-Create first face stiajka features: 7.86s
+Create first face stiajka features: 4.27s
 Stiajka first face sketches hidden: 1
 Second sketch drilling point axis is parallel to selected faces intersection line.
+Second sketch edge offset: ПД_отступ_присадки_от_кромки = 5.0
 Created second face drilling sketch with offset: DrillingSketch_2 Стяжка_отступ
 Second face stiajka holes created: 2 Стяжка_D Стяжкаh_резьбаШтока_Петля
 Stiajka second face sketches hidden: 1
-Second sketch drilling point axis is parallel to selected faces intersection line.
-Created second face drilling sketch with offset: DrillingSketch_3 Стяжка_отступ
-Second face stiajka holes created: 2 Стяжка_D Стяжкаh_резьбаШтока_Петля
-Stiajka second face sketches hidden: 1
-Create second face stiajka holes: 13.64s
-Update document: 0.02s
+Create second face stiajka holes: 5.22s
+Update document: 0.01s
 First face stiajka features created: 4
-Second face stiajka features created: 2
+Second face stiajka features created: 1

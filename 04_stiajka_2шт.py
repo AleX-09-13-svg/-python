@@ -8,7 +8,6 @@ from math import sqrt
 
 from common.constants import (
     DRILLING_SKETCH_PREFIX,
-    EDGE_OFFSET_DRAWER_PARAM,
     GRID_STEP_CM,
     POINT_DISTANCE_PARAM,
 )
@@ -176,11 +175,6 @@ def choose_frame_edge_offset_parameter(inventor):
     return selected["frame_edge_offset"]
 
 
-def use_frame_edge_offset(edge_offset_param):
-    stiajka_module.EDGE_OFFSET_FRAME_PARAM = edge_offset_param
-    create_sketches.EDGE_OFFSET_FRAME_PARAM = edge_offset_param
-
-
 def faces_by_area(inventor, faces):
     areas = []
     for index, face in enumerate(faces, start=1):
@@ -306,12 +300,33 @@ def plane_intersection_model_line(inventor, face, reference_face):
     return point, direction
 
 
+def second_sketch_reference_lines(inventor, sketch, start, ux, uy, min_distance, max_distance):
+    """Find projected boundary lines for the offset and the two ends of the axis."""
+    reference = left = right = None
+    tolerance = 1e-5
+    for line in inventor.sketch_lines(sketch, construction=False):
+        a = line.StartSketchPoint.Geometry
+        b = line.EndSketchPoint.Geometry
+        along = [(p.X - start.X) * ux + (p.Y - start.Y) * uy for p in (a, b)]
+        across = [-(p.X - start.X) * uy + (p.Y - start.Y) * ux for p in (a, b)]
+        if max(abs(value) for value in across) < tolerance and abs(along[1] - along[0]) > tolerance:
+            reference = line
+        if max(abs(value - min_distance) for value in along) < tolerance:
+            left = line
+        if max(abs(value - max_distance) for value in along) < tolerance:
+            right = line
+    if reference is None or left is None or right is None:
+        raise ValueError("Cannot bind second sketch: intersection edge or side edges not found.")
+    return reference, left, right
+
+
 def create_offset_drilling_sketch(
     inventor,
     face,
     reference_face,
     index,
     offset_param,
+    edge_offset_param,
 ):
     intersection_point, intersection_direction = plane_intersection_model_line(
         inventor,
@@ -335,7 +350,7 @@ def create_offset_drilling_sketch(
         stiajka_module.stiajka_setting("side_offset", default=3.4),
     )
     with inventor.deferred_sketch_updates(sketch):
-        inventor.project_face_edges(sketch, face)
+        inventor.project_face_edges(sketch, face, ignore_errors=False)
         intersection_start = inventor.model_to_sketch_point(
             sketch,
             inventor.create_point3d(*intersection_point),
@@ -381,7 +396,9 @@ def create_offset_drilling_sketch(
             print("Second face span along intersection direction is zero.")
             return None
 
-        edge_offset_param = create_sketches.edge_offset_param_for_length(length)
+        reference_line, left_side, right_side = second_sketch_reference_lines(
+            inventor, sketch, start, ux, uy, min_distance, max_distance,
+        )
         midpoint = inventor.create_point2d(
             base.X + ux * ((min_distance + max_distance) / 2),
             base.Y + uy * ((min_distance + max_distance) / 2),
@@ -400,34 +417,54 @@ def create_offset_drilling_sketch(
             offset_end,
             construction=True,
         )
+        inventor.add_parallel_constraint(sketch, axis, reference_line, ignore_errors=False)
+        inventor.add_coincident_constraint(
+            sketch, axis.StartSketchPoint, left_side, ignore_errors=False,
+        )
+        inventor.add_coincident_constraint(
+            sketch, axis.EndSketchPoint, right_side, ignore_errors=False,
+        )
         print(
             "Second sketch drilling point axis is parallel to selected faces intersection line."
         )
 
         offset_anchor = inventor.add_sketch_line(
             sketch,
-            start,
-            base,
+            inventor.create_point2d(
+                midpoint.X - nx * offset_value,
+                midpoint.Y - ny * offset_value,
+            ),
+            midpoint,
             construction=True,
+        )
+        inventor.add_coincident_constraint(
+            sketch, offset_anchor.StartSketchPoint, reference_line, ignore_errors=False,
         )
         inventor.add_coincident_constraint(
             sketch,
             offset_anchor.EndSketchPoint,
             axis,
+            ignore_errors=False,
         )
-        inventor.add_perpendicular_constraint(sketch, offset_anchor, axis)
+        inventor.add_perpendicular_constraint(sketch, offset_anchor, axis, ignore_errors=False)
 
         center = midpoint
         symmetry_axis = inventor.add_sketch_line(
             sketch,
-            inventor.create_point2d(center.X - nx, center.Y - ny),
+            center,
             inventor.create_point2d(center.X + nx, center.Y + ny),
             construction=True,
         )
-        inventor.add_perpendicular_constraint(sketch, axis, symmetry_axis)
-        inventor.add_midpoint_constraint(sketch, symmetry_axis.StartSketchPoint, axis)
+        inventor.add_perpendicular_constraint(sketch, axis, symmetry_axis, ignore_errors=False)
+        inventor.add_midpoint_constraint(
+            sketch, symmetry_axis.StartSketchPoint, axis, ignore_errors=False,
+        )
+        inventor.add_coincident_constraint(
+            sketch, offset_anchor.EndSketchPoint, symmetry_axis, ignore_errors=False,
+        )
 
         edge_offset_value = inventor.parameter_value(edge_offset_param, 10)
+        print("Second sketch edge offset:", edge_offset_param, "=", edge_offset_value)
         point_distance_value = (
             int((length - edge_offset_value * 2) / GRID_STEP_CM) * GRID_STEP_CM
         )
@@ -469,8 +506,8 @@ def create_offset_drilling_sketch(
             offset_anchor.StartSketchPoint,
             offset_anchor.EndSketchPoint,
             inventor.create_point2d(
-                (start.X + offset_start.X) / 2 + ux * 2,
-                (start.Y + offset_start.Y) / 2 + uy * 2,
+                midpoint.X - nx * offset_value / 2 + ux * 2,
+                midpoint.Y - ny * offset_value / 2 + uy * 2,
             ),
         )
 
@@ -532,12 +569,10 @@ def main():
         return
 
     print("Frame edge offset parameter:", frame_edge_offset_param)
-    use_frame_edge_offset(frame_edge_offset_param)
     stiajka_offset_param = stiajka_module.stiajka_parameter("offset", "Стяжка_отступ")
 
     required_parameters = (
         frame_edge_offset_param,
-        EDGE_OFFSET_DRAWER_PARAM,
         stiajka_offset_param,
         *stiajka_module.stiajka_required_parameter_names(),
     )
@@ -560,7 +595,7 @@ def main():
         None,
         first_faces,
         DRILLING_SKETCH_PREFIX,
-        None,
+        frame_edge_offset_param,
         "Drilling",
         "Selected first face drilling",
         reuse_existing=True,
@@ -589,6 +624,7 @@ def main():
             first_face,
             index,
             stiajka_offset_param,
+            frame_edge_offset_param,
         )
         if second_result is None:
             continue

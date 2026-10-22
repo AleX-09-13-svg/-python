@@ -13,7 +13,7 @@ from common.settings import drawer_edge_max_cm, hole_direction, setting
 
 ensure_inventor_service_path()
 
-from inventor_service import confirmat as _confirmat
+from workflows import confirmat as _confirmat
 
 
 STIAJKA_CUP_SKETCH_PREFIX = "StiajkaCupSketch"
