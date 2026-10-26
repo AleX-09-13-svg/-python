@@ -10,7 +10,7 @@ LIBRARY_SETTINGS_PATH = (
     Path(__file__).resolve().parents[2]
     / "01_inventor_service"
     / "service"
-    / "infa"
+    / "excel_parameters"
     / "part_config.example.json"
 )
 DEFAULT_DRAWER_EDGE_MAX_CM = 60.0

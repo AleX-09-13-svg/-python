@@ -1,18 +1,13 @@
 from common.inventor_service_path import ensure_inventor_service_path
 from common.settings import load_settings
-from common.constants import FRAME_THICKNESS_PARAM as DEFAULT_FRAME_THICKNESS_PARAM
 
 ensure_inventor_service_path()
 
 from inventor_service.settings import configure_settings
 from workflows import confirmat as _confirmat
 
-
-FRAME_THICKNESS_PARAM = getattr(
-    _confirmat,
-    "FRAME_THICKNESS_PARAM",
-    DEFAULT_FRAME_THICKNESS_PARAM,
-)
+# Текущий выбор толщины хранится отдельно от постоянных имён PARAMETERS.
+frame_thickness_param = _confirmat.frame_thickness_param
 _ORIGINAL_ADD_COUNTERBORE_HOLES = _confirmat.add_counterbore_holes
 K_EQUAL_TO_COMPARISON_TYPE = 60417
 _LAST_CREATED_FEATURES = []
@@ -85,10 +80,10 @@ def _sync_settings():
     settings = load_settings()
     settings = _settings_with_runtime_parameters(
         settings,
-        (FRAME_THICKNESS_PARAM,),
+        (frame_thickness_param,),
     )
     configure_settings(settings)
-    _confirmat.FRAME_THICKNESS_PARAM = FRAME_THICKNESS_PARAM
+    _confirmat.frame_thickness_param = frame_thickness_param
     _confirmat.add_counterbore_holes = _add_counterbore_holes_with_fallback
 
 
@@ -191,16 +186,6 @@ def _confirmat_points_by_face(inventor, sketch, sketch_faces, face_label):
     return result
 
 
-def create_confirmat_features(*args, **kwargs):
-    _sync_settings()
-    return _confirmat.create_confirmat_features(*args, **kwargs)
-
-
-def create_confirmat_2_features(*args, **kwargs):
-    _sync_settings()
-    return _confirmat.create_confirmat_2_features(*args, **kwargs)
-
-
 def create_confirmat_edges_and_center_features(
     inventor,
     sketches=None,
@@ -229,6 +214,7 @@ def create_confirmat_edges_and_center_features(
 
     print("Confirmat edge/center sketches found:", len(sketches))
 
+    plane_offsets = _confirmat.sketch_plane_offsets(inventor)
     for sketch in sketches:
         print("Sketch:", sketch.Name)
         print(
@@ -242,7 +228,7 @@ def create_confirmat_edges_and_center_features(
         sketch_faces = _confirmat.faces_on_sketch_plane(
             sketch,
             colored_faces,
-            _confirmat.sketch_plane_offsets(inventor),
+            plane_offsets,
         )
         print(f"  {face_label} faces on sketch plane:", len(sketch_faces))
 

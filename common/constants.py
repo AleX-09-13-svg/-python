@@ -1,18 +1,24 @@
+# Общие константы проекта: имена параметров Inventor, шаг сетки и имена эскизов.
+# PARAMETERS хранит постоянные имена параметров, без числовых значений
+# и без выбранных пользователем настроек конкретного запуска.
+from types import SimpleNamespace
+
 from common.settings import dimension_orientation
 
+# Имена параметров по умолчанию; выбор пользователя хранится отдельно.
+PARAMETERS = SimpleNamespace(
+    edge_offset="Минимальный_отступ_присадки_от_кромки_Каркас",
+    frame_thickness="Толщина_каркаса",
+    point_distance="Расстояние_между_точками",  # Скрипт создаёт размер в эскизе детали и задаёт его параметру имя Расстояние_между_точками (или уникальный вариант имени) и формулу:
+    # floor((Long_edge_N - выбранный_отступ * 2) / 32 mm) * 32 mm
+    # Далее формулу вычисляет Inventor внутри детали. При изменении длины или отступа расстояние пересчитывается при обновлении модели.
+    # Перед созданием размера Python также рассчитывает начальное расстояние для размещения точек.
+)
 
 ALIGNED_DIM = dimension_orientation("aligned")
 GRID_STEP_CM = 3.2
 
-EDGE_OFFSET_FRAME_PARAM = "\u041c\u0438\u043d\u0438\u043c\u0430\u043b\u044c\u043d\u044b\u0439_\u043e\u0442\u0441\u0442\u0443\u043f_\u043f\u0440\u0438\u0441\u0430\u0434\u043a\u0438_\u043e\u0442_\u043a\u0440\u043e\u043c\u043a\u0438_\u041a\u0430\u0440\u043a\u0430\u0441"
-EDGE_OFFSET_DRAWER_PARAM = "\u041c\u0438\u043d\u0438\u043c\u0430\u043b\u044c\u043d\u044b\u0439_\u043e\u0442\u0441\u0442\u0443\u043f_\u043f\u0440\u0438\u0441\u0430\u0434\u043a\u0438_\u043e\u0442_\u043a\u0440\u043e\u043c\u043a\u0438_\u042f\u0449\u0438\u043a"
-FRAME_THICKNESS_PARAM = "\u0422\u043e\u043b\u0449\u0438\u043d\u0430_\u043a\u0430\u0440\u043a\u0430\u0441\u0430"
-EDGE_OFFSET_PARAM = EDGE_OFFSET_FRAME_PARAM
-REQUIRED_SKETCH_PARAMS = (
-    EDGE_OFFSET_FRAME_PARAM,
-    EDGE_OFFSET_DRAWER_PARAM,
-    FRAME_THICKNESS_PARAM,
-)
-POINT_DISTANCE_PARAM = "\u0420\u0430\u0441\u0441\u0442\u043e\u044f\u043d\u0438\u0435_\u043c\u0435\u0436\u0434\u0443_\u0442\u043e\u0447\u043a\u0430\u043c\u0438"
+
+# Это начала имён эскизов, которые создаёт и ищет код
 DRILLING_SKETCH_PREFIX = "DrillingSketch"
 DRAWER_SKETCH_PREFIX = "DrawerSketch"

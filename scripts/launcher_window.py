@@ -12,9 +12,10 @@ from tkinter.scrolledtext import ScrolledText
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 COMMANDS = {
-    "stiajka": ("Stiajka 2pcs", "04_stiajka_2\u0448\u0442.py"),
-    "confirmat2": ("Confirmat", "02_confirmat_2\u0448\u0442_Bok16.py"),
-    "confirmat2_bok16": ("Confirmat", "02_confirmat_2\u0448\u0442_Bok16.py"),
+    "stiajka5": ("Stiajka 05", "05_stiajka.py"),
+    "stiajka": ("Stiajka 2pcs", "05_stiajka.py"),
+    "confirmat2": ("Confirmat", "02_confirmat.py"),
+    "confirmat2_bok16": ("Confirmat", "02_confirmat.py"),
 }
 
 

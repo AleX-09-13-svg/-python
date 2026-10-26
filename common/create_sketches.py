@@ -1,14 +1,10 @@
 import sys
 
 from common.constants import (
+    PARAMETERS,
     DRILLING_SKETCH_PREFIX,
-    EDGE_OFFSET_DRAWER_PARAM,
-    EDGE_OFFSET_FRAME_PARAM,
-    FRAME_THICKNESS_PARAM,
     GRID_STEP_CM,
-    POINT_DISTANCE_PARAM,
 )
-from common.settings import drawer_edge_max_cm
 
 
 KEEP_EXCEL_PARAMS_NAME = "Keep_Excel_Params"
@@ -38,17 +34,13 @@ def ensure_sketch_parameters(inventor):
     return ensure_parameters(
         inventor,
         (
-            EDGE_OFFSET_FRAME_PARAM,
-            EDGE_OFFSET_DRAWER_PARAM,
+            PARAMETERS.edge_offset,
         ),
     )
 
 
 def edge_offset_param_for_length(long_edge_length):
-    if long_edge_length <= drawer_edge_max_cm():
-        return EDGE_OFFSET_DRAWER_PARAM
-
-    return EDGE_OFFSET_FRAME_PARAM
+    return PARAMETERS.edge_offset
 
 
 def _line_length_squared(inventor, line):
@@ -194,7 +186,7 @@ def _create_drilling_sketch_fixed(
         inventor.parameters,
     )
     point_distance_dim.Parameter.Name = inventor.unique_parameter_name(
-        POINT_DISTANCE_PARAM,
+        PARAMETERS.point_distance,
         inventor.parameters,
     )
     point_distance_dim.Parameter.Expression = (
@@ -215,7 +207,7 @@ def create_sketches_for_faces(
     sketch_label,
     face_label,
     use_offset_plane=False,
-    offset_param=FRAME_THICKNESS_PARAM,
+    offset_param=PARAMETERS.frame_thickness,
     reuse_existing=True,
 ):
     if edge_offset_param is None:

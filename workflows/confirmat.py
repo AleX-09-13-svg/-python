@@ -1,5 +1,8 @@
-from common.constants import DRILLING_SKETCH_PREFIX, FRAME_THICKNESS_PARAM
+from common.constants import DRILLING_SKETCH_PREFIX, PARAMETERS
 from common.settings import hole_direction, setting
+
+# Текущий выбор толщины для операций конфирмата; PARAMETERS не изменяется.
+frame_thickness_param = PARAMETERS.frame_thickness
 
 FEATURE_NAME_COUNTERS = {}
 
@@ -88,7 +91,7 @@ def sketch_on_red_face_plane(sketch, red_faces):
 
 
 def sketch_plane_offsets(inventor):
-    offset = inventor.parameter_value(FRAME_THICKNESS_PARAM, 0)
+    offset = inventor.parameter_value(frame_thickness_param, 0)
     offsets = [0]
 
     try:

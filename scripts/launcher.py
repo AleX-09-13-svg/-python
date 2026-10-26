@@ -9,17 +9,21 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 COMMANDS = {
+    "stiajka5": {
+        "title": "Stiajka 05",
+        "script": "05_stiajka.py",
+    },
     "stiajka": {
         "title": "Stiajka 2pcs",
-        "script": "04_stiajka_2\u0448\u0442.py",
+        "script": "05_stiajka.py",
     },
     "confirmat2": {
         "title": "Confirmat",
-        "script": "02_confirmat_2\u0448\u0442_Bok16.py",
+        "script": "02_confirmat.py",
     },
     "confirmat2_bok16": {
         "title": "Confirmat",
-        "script": "02_confirmat_2\u0448\u0442_Bok16.py",
+        "script": "02_confirmat.py",
     },
 }
 
