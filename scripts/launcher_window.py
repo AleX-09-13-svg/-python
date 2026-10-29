@@ -12,6 +12,7 @@ from tkinter.scrolledtext import ScrolledText
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 COMMANDS = {
+    "line_parameter": ("Размер выбранных отрезков", "06_line_parameter.py"),
     "stiajka5": ("Stiajka 05", "05_stiajka.py"),
     "stiajka": ("Stiajka 2pcs", "05_stiajka.py"),
     "confirmat2": ("Confirmat", "02_confirmat.py"),
@@ -69,7 +70,7 @@ class LauncherWindow:
         self.output_queue.put(f"Script: {script_path}\n\n")
 
         self.process = subprocess.Popen(
-            [sys.executable, str(script_path), *self.extra_args],
+            [sys.executable, "-X", "utf8", "-u", str(script_path), *self.extra_args],
             cwd=PROJECT_ROOT,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,

@@ -9,6 +9,10 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 COMMANDS = {
+    "line_parameter": {
+        "title": "Размер выбранных отрезков",
+        "script": "06_line_parameter.py",
+    },
     "stiajka5": {
         "title": "Stiajka 05",
         "script": "05_stiajka.py",
