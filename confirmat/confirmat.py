@@ -195,6 +195,8 @@ def create_confirmat_edges_and_center_features(
     center_suppressed=False,
     center_suppression_parameter=None,
     center_suppression_value=2,
+    point_jobs=None,
+    update_document=True,
 ):
     _sync_settings()
 
@@ -214,8 +216,15 @@ def create_confirmat_edges_and_center_features(
 
     print("Confirmat edge/center sketches found:", len(sketches))
 
-    plane_offsets = _confirmat.sketch_plane_offsets(inventor)
-    for sketch in sketches:
+    if point_jobs is not None:
+        for sketch in sketches:
+            _confirmat.try_share_sketch(sketch)
+        for job in point_jobs:
+            edge_points.extend(job["outer_points"])
+            center_points.append(job["center_point"])
+
+    plane_offsets = _confirmat.sketch_plane_offsets(inventor) if point_jobs is None else None
+    for sketch in (sketches if point_jobs is None else ()):
         print("Sketch:", sketch.Name)
         print(
             "  sketch lines/points/dims:",
@@ -290,5 +299,6 @@ def create_confirmat_edges_and_center_features(
             print("  center confirmat counterbore failed:", exc)
 
     print(f"{face_label.capitalize()} faces appearance reset skipped")
-    inventor.update()
+    if update_document:
+        inventor.update()
     return created

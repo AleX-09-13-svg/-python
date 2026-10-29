@@ -1,5 +1,6 @@
 # Подготовка параметров конфирмата и сохранение ссылок на параметры детали.
 from common.settings import load_settings
+import re
 import confirmat.confirmat as confirmat_module
 
 KEEP_EXCEL_UNITLESS_PARAMS_NAME = "Keep_Excel_Params_Unitless"
@@ -42,10 +43,15 @@ def confirmat_parameter_names():
 
 def resolve_confirmat_count(inventor, count_param):
     value = inventor.parameter_value(count_param, None)
-    expression = inventor.parameter_expression(count_param, "")
+    # Выражение читать только если числовое значение не удалось распознать.
+    expression = ""
+    def candidates():
+        nonlocal expression
+        yield value
+        expression = inventor.parameter_expression(count_param, "")
+        yield expression
 
-    candidates = (value, expression)
-    for candidate in candidates:
+    for candidate in candidates():
         if candidate is None:
             continue
 
@@ -97,8 +103,14 @@ def ensure_unitless_keep_parameter(inventor, name, referenced_parameter_names):
     expression = " + ".join(terms) or "0"
     try:
         # 11265 — UnitsTypeEnum.kUnitlessUnits в API Inventor.
-        parameter = inventor.ensure_user_parameter(name, expression, units=11265)
-        parameter.Expression = expression
+        try:
+            parameter = inventor.parameter(name)
+        except Exception:
+            parameter = None
+        if parameter is None:
+            parameter = inventor.ensure_user_parameter(name, expression, units=11265)
+        if re.sub(r"\s+", "", parameter.Expression) != re.sub(r"\s+", "", expression):
+            parameter.Expression = expression
     except Exception as exc:
         raise RuntimeError(
             f"Не удалось задать {name}: {expression}. "

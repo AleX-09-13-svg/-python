@@ -327,6 +327,7 @@ def create_sketches_for_faces(
     reference_edges=None,
     use_cached_operations=False,
     edge_cache=None,
+    compact_points=None,
 ):
     if direct_projection and reuse_existing:
         raise ValueError("Прямая проекция доступна только для новых эскизов.")
@@ -417,7 +418,7 @@ def create_sketches_for_faces(
                     count + 1,
                     edge_offset_param,
                     project_edges=not has_geometry,
-                    compact_points=point_jobs is not None,
+                    compact_points=(point_jobs is not None if compact_points is None else compact_points),
                     edge_offset_value=edge_offset_value,
                     projected_lines=projected_lines,
                     runtime_names=runtime_names,
@@ -432,6 +433,7 @@ def create_sketches_for_faces(
                             "sketch": sketch,
                             "colored_face": face,
                             "outer_points": [points[0], points[1]],
+                            "center_point": points[4],
                             "inner_points": ([points[2]] if points[2] is points[3]
                                              else [points[2], points[3]]),
                         })

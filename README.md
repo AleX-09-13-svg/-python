@@ -173,6 +173,8 @@ docs/                          - вспомогательные материал
 
 ## Проверки
 
+Для сравнения с исполнением внутри Inventor добавлено самостоятельное внешнее правило `scripts/Создание присадки/05_Stiajka_Native.iLogicVb`. Оно выполняет присадку через Inventor API и пишет замеры в `05_stiajka_ilogic.log`. Запуск и условия сравнения описаны в [инструкции](docs/05_stiajka_ilogic.md). Проверка компиляции и настроек без изменения модели: `python -X utf8 -B scripts/validate_ilogic_native.py --smoke`.
+
 Проверить синтаксис Python-файлов:
 
 ```powershell

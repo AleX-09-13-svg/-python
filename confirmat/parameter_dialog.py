@@ -2,19 +2,20 @@
 import tkinter as tk
 from tkinter import ttk
 from common.constants import PARAMETERS
+from stiajka.parameter_dialog import parameter_collection_names as cached_parameter_names
 
 DEFAULT_THICKNESS_PARAMS = ("Толщина_каркаса_МДФ", "Толщина_каркаса_ШПОН", "Толщина_каркаса")
 DEFAULT_FRAME_EDGE_OFFSET_PARAMS = (PARAMETERS.edge_offset,)
 DEFAULT_CONFIRMAT_COUNT_PARAMS = ("Количество_конфирматов", "Конфирмат_количество")
 
 
-def choose_workflow_parameters(inventor):
+def choose_workflow_parameters(inventor, parameter_cache=None):
     selected = {
         "thickness": None,
         "frame_edge_offset": None,
         "confirmat_count_param": None,
     }
-    names = all_parameter_names(inventor)
+    names = all_parameter_names(inventor, include_model=False, parameter_cache=parameter_cache)
     thickness_options = thickness_parameter_options(names)
     offset_options = frame_edge_offset_parameter_options(names)
     count_options = confirmat_count_parameter_options(names)
@@ -23,7 +24,7 @@ def choose_workflow_parameters(inventor):
     root.title(
         "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u043f\u0430\u0440\u0430\u043c\u0435\u0442\u0440\u044b \u043f\u0440\u0438\u0441\u0430\u0434\u043a\u0438"
     )
-    root.geometry("560x250+80+80")
+    root.geometry("680x340+80+80")
     root.resizable(False, False)
 
     frame = ttk.Frame(root, padding=12)
@@ -80,6 +81,18 @@ def choose_workflow_parameters(inventor):
 
     buttons = ttk.Frame(frame)
     buttons.pack(fill=tk.X)
+
+    def load_model_parameters():
+        model_button.config(state=tk.DISABLED)
+        root.update_idletasks()
+        extra = cached_parameter_names(getattr(inventor, "model_parameters", None), parameter_cache)
+        combined = unique_names((*names, *extra))
+        thickness_combo.config(values=thickness_parameter_options(combined))
+        offset_combo.config(values=frame_edge_offset_parameter_options(combined))
+        count_combo.config(values=confirmat_count_parameter_options(combined))
+
+    model_button = ttk.Button(buttons, text="Загрузить параметры модели", command=load_model_parameters)
+    model_button.pack(side=tk.LEFT)
 
     def accept():
         selected["thickness"] = thickness_value.get().strip()
@@ -154,14 +167,14 @@ def parameter_collection_names(collection):
     return names
 
 
-def all_parameter_names(inventor):
+def all_parameter_names(inventor, include_model=True, parameter_cache=None):
     names = []
 
-    for collection in (
-        getattr(inventor, "user_parameters", None),
-        getattr(inventor, "model_parameters", None),
-    ):
+    collections = [getattr(inventor, "user_parameters", None)]
+    if include_model:
+        collections.append(getattr(inventor, "model_parameters", None))
+    for collection in collections:
         if collection is not None:
-            names.extend(parameter_collection_names(collection))
+            names.extend(cached_parameter_names(collection, parameter_cache))
 
     return unique_names(names)
