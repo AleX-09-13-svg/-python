@@ -173,7 +173,7 @@ docs/                          - вспомогательные материал
 
 ## Проверки
 
-Для сравнения с исполнением внутри Inventor добавлено самостоятельное внешнее правило `scripts/Создание присадки/05_Stiajka_Native.iLogicVb`. Оно выполняет присадку через Inventor API и пишет замеры в `05_stiajka_ilogic.log`. Запуск и условия сравнения описаны в [инструкции](docs/05_stiajka_ilogic.md). Проверка компиляции и настроек без изменения модели: `python -X utf8 -B scripts/validate_ilogic_native.py --smoke`.
+Для исполнения внутри Inventor используются модульные внешние правила `ilogic/Stiajka/Stiajka_1_inch.iLogicVb`, `Stiajka_2_inch.iLogicVb` и `Stiajka_4_inch.iLogicVb`. Они подключают общие модули через `AddVbFile` и выполняют присадку через Inventor API без запуска Python. Добавьте папку `ilogic/Stiajka` в «Конфигурация iLogic → Внешние папки правил». Структура описана в [инструкции к модулям](ilogic/Stiajka/README.md), запуск и сравнение варианта на две стяжки с Python — в [инструкции](docs/05_stiajka_ilogic.md). Проверка компиляции и настроек варианта на две стяжки без изменения модели: `python -X utf8 -B scripts/validate_ilogic_native.py --smoke`. Модульное правило конфирматов находится в `ilogic/Confirmat`.
 
 Проверить синтаксис Python-файлов:
 

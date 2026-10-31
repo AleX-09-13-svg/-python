@@ -1,129 +1,79 @@
 Запуск 05. Журнал: D:\Копия Google диска\02_Скрипты\01_Скрипты для работы\For Inventor\Присадка кодом Python\05_stiajka.log
 05: Подключение к Inventor
-Selected objects: 4
-Selected Stiajka 2pcs faces: 4
+Selected objects: 2
+Selected Stiajka 2pcs faces: 2
 05: Выбор параметра отступа
-  Инициализация параметров: 0.07s
-05: Чтение списка параметров: 0.66s; имён: 27
-  Проверка необходимых параметров: 0.05s
-  Подготовка Keep_Excel_Params: 0.14s
+  Инициализация параметров: 0.16s
+05: Чтение списка параметров: 0.47s; имён: 6
+  Проверка необходимых параметров: 0.26s
+  Подготовка Keep_Excel_Params: 0.06s
 05: Keep_Excel_Params: обновлён
-  Чтение значений отступов: 0.00s
+  Чтение значений отступов: 0.08s
 05: Построение первых эскизов
-Selected first face drilling faces: 2
+Selected first face drilling faces: 1
 Drilling sketch planes: 1
-  Drilling sketch color set: DrillingSketch_1_17
+  Drilling sketch color set: DrillingSketch_1
   face state: has_geometry=False, has_drilling_axes=False
-    Проекция рёбер: 0.27s
-  build drilling geometry: sketch=DrillingSketch_1_17, project_edges=True
+    Проекция рёбер: 0.11s
+  build drilling geometry: sketch=DrillingSketch_1, project_edges=True
     face lines found: 4
     short edge lengths: 1.6 1.6
-    Подготовка геометрии: 1.12s
-    long edge length: 13.1
-    Построение осей: 0.90s
-    edge offset: ПД_Желаемый_отступ_стяжка_ящика = 2.0
-    point distance: 6.4
-    Компактная присадка: две стяжки и один центральный шкант
-    Точки и зависимости: 0.54s
-    Размеры и имена параметров: 2.34s
+    Подготовка геометрии: 1.25s
+    long edge length: 70.0
+    Построение осей: 0.91s
+    edge offset: ПД_отступ_присадки_от_кромки = 12.0
+    point distance: 44.8
+    Точки и зависимости: 0.80s
+    Размеры и имена параметров: 0.96s
     drilling geometry created
-  face state: has_geometry=False, has_drilling_axes=False
-    Проекция рёбер: 0.28s
-  build drilling geometry: sketch=DrillingSketch_1_17, project_edges=True
-    face lines found: 4
-    short edge lengths: 1.6 1.6
-    Подготовка геометрии: 1.19s
-    long edge length: 13.1
-    Построение осей: 0.57s
-    edge offset: ПД_Желаемый_отступ_стяжка_ящика = 2.0
-    point distance: 6.4
-    Компактная присадка: две стяжки и один центральный шкант
-    Точки и зависимости: 0.35s
-    Размеры и имена параметров: 1.02s
-    drilling geometry created
-    Обновление решателя эскиза: 0.03s
-Drilling faces processed: 2
+    Обновление решателя эскиза: 0.01s
+Drilling faces processed: 1
 Drilling sketches created: 1
 Drilling sketches reused: 0
 Drilling faces skipped: 0
-  Первые эскизы: 10.09s
+  Первые эскизы: 5.28s
 05: Построение второго эскиза
-    Проекция рёбер: 0.35s
+    Проекция рёбер: 0.20s
     second sketch projected lines: 4
-05: Построение второго эскиза
-    Проекция рёбер: 0.39s
-    second sketch projected lines: 4
-  Вторые эскизы: 10.38s
+  Вторые эскизы: 6.90s
 05: Поиск соседа: запросов по всей детали — 1; найденных граней — 2
-    Центры в координатах модели: 0.47s; поиск граней: 0.16s; проверка кандидатов: 1.14s
-05: Тело выбранной грани: Твердое тело23; соседнее тело: Твердое тело19
-05: Поиск соседа: запросов по всей детали — 1; найденных граней — 2
-    Центры в координатах модели: 0.53s; поиск граней: 0.12s; проверка кандидатов: 0.96s
-05: Тело выбранной грани: Твердое тело35; соседнее тело: Твердое тело34
-  Поиск соседних тел: 3.50s
+    Центры в координатах модели: 1.08s; поиск граней: 0.25s; проверка кандидатов: 1.95s
+05: Тело выбранной грани: Твердое тело3; соседнее тело: Твердое тело2
+  Поиск соседних тел: 3.48s
 05: Создание отверстий на первых гранях
 Stiajka sketches found: 1
-    Stiajka outer 8x34 — подготовка точек и размещения: 0.10s
-    Stiajka outer 8x34 — создание операции Inventor: 0.30s
-    Stiajka outer 8x34 — подбор и назначение имени: 0.27s
-    Stiajka outer 8x34 — назначение одного тела 'Твердое тело23': 0.25s
+    Stiajka outer 8x34 — подготовка точек и размещения: 0.18s
+    Stiajka outer 8x34 — создание операции Inventor: 0.17s
+    Stiajka outer 8x34 — подбор и назначение имени: 0.14s
+    Stiajka outer 8x34 — назначение одного тела 'Твердое тело3': 0.06s
   created outer 8x34 batch, points=2
-  outer 8x34 batch elapsed: 1.30s
-    Stiajka outer 8x34 — подготовка точек и размещения: 0.05s
-    Stiajka outer 8x34 — создание операции Inventor: 0.23s
-    Stiajka outer 8x34 — подбор и назначение имени: 0.04s
-    Stiajka outer 8x34 — назначение одного тела 'Твердое тело35': 0.22s
-  created outer 8x34 batch, points=2
-  outer 8x34 batch elapsed: 0.76s
-    Stiajka outer 5x13 — подготовка точек и размещения: 0.05s
-    Stiajka outer 5x13 — создание операции Inventor: 0.27s
-    Stiajka outer 5x13 — подбор и назначение имени: 0.25s
-    Stiajka outer 5x13 — назначение одного тела 'Твердое тело19': 0.20s
+  outer 8x34 batch elapsed: 1.11s
+    Stiajka outer 5x13 — подготовка точек и размещения: 0.07s
+    Stiajka outer 5x13 — создание операции Inventor: 0.04s
+    Stiajka outer 5x13 — подбор и назначение имени: 0.05s
+    Stiajka outer 5x13 — назначение одного тела 'Твердое тело2': 0.06s
   created outer 5x13 batch, points=2
-  outer 5x13 batch elapsed: 0.82s
-    Stiajka outer 5x13 — подготовка точек и размещения: 0.00s
-    Stiajka outer 5x13 — создание операции Inventor: 0.22s
-    Stiajka outer 5x13 — подбор и назначение имени: 0.02s
-    Stiajka outer 5x13 — назначение одного тела 'Твердое тело34': 0.19s
-  created outer 5x13 batch, points=2
-  outer 5x13 batch elapsed: 0.43s
+  outer 5x13 batch elapsed: 0.26s
     Shkant 8x10 — подготовка точек и размещения: 0.03s
-    Shkant 8x10 — создание операции Inventor: 0.23s
-    Shkant 8x10 — подбор и назначение имени: 0.28s
-    Shkant 8x10 — назначение одного тела 'Твердое тело19': 0.20s
-  created inner 8x10 batch, points=1
-  inner 8x10 batch elapsed: 0.85s
-    Shkant 8x10 — подготовка точек и размещения: 0.02s
-    Shkant 8x10 — создание операции Inventor: 0.23s
-    Shkant 8x10 — подбор и назначение имени: 0.04s
-    Shkant 8x10 — назначение одного тела 'Твердое тело34': 0.18s
-  created inner 8x10 batch, points=1
-  inner 8x10 batch elapsed: 0.60s
-    Shkant 8x20 — подготовка точек и размещения: 0.03s
-    Shkant 8x20 — создание операции Inventor: 0.21s
-    Shkant 8x20 — подбор и назначение имени: 0.24s
-    Shkant 8x20 — назначение одного тела 'Твердое тело23': 0.19s
-  created inner 8x20 batch, points=1
-  inner 8x20 batch elapsed: 0.69s
+    Shkant 8x10 — создание операции Inventor: 0.05s
+    Shkant 8x10 — подбор и назначение имени: 0.08s
+    Shkant 8x10 — назначение одного тела 'Твердое тело2': 0.04s
+  created inner 8x10 batch, points=2
+  inner 8x10 batch elapsed: 0.56s
     Shkant 8x20 — подготовка точек и размещения: 0.02s
-    Shkant 8x20 — создание операции Inventor: 0.20s
+    Shkant 8x20 — создание операции Inventor: 0.04s
     Shkant 8x20 — подбор и назначение имени: 0.04s
-    Shkant 8x20 — назначение одного тела 'Твердое тело35': 0.21s
-  created inner 8x20 batch, points=1
-  inner 8x20 batch elapsed: 0.47s
+    Shkant 8x20 — назначение одного тела 'Твердое тело3': 0.07s
+  created inner 8x20 batch, points=2
+  inner 8x20 batch elapsed: 0.20s
   document update skipped
 05: Создание отверстий на второй грани
-    Stiajka cup — подготовка точек и размещения: 0.25s
-    Stiajka cup — создание операции Inventor: 0.28s
-    Stiajka cup — подбор и назначение имени: 0.08s
-    Stiajka cup — назначение одного тела 'Твердое тело23': 0.18s
-05: Создание отверстий на второй грани
-    Stiajka cup — подготовка точек и размещения: 0.26s
-    Stiajka cup — создание операции Inventor: 0.20s
-    Stiajka cup — подбор и назначение имени: 0.09s
-    Stiajka cup — назначение одного тела 'Твердое тело35': 0.22s
-  Все отверстия: 7.75s
+    Stiajka cup — подготовка точек и размещения: 0.14s
+    Stiajka cup — создание операции Inventor: 0.07s
+    Stiajka cup — подбор и назначение имени: 0.05s
+    Stiajka cup — назначение одного тела 'Твердое тело3': 0.11s
+  Все отверстия: 3.03s
 05: Обновление документа
-  Обновление документа: 0.02s
-  05: Общее время построения: 31.98s
+  Обновление документа: 0.07s
+  05: Общее время построения: 19.24s
 05: Готово

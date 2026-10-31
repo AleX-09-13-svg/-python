@@ -1,0 +1,101 @@
+﻿' Native iLogic equivalent of 02_confirmat.py.
+AddReference "System.Web.Extensions.dll"
+AddReference "System.Drawing.dll"
+AddReference "System.Windows.Forms.dll"
+Imports Inventor
+Imports System.Collections.Generic
+Imports System.Diagnostics
+Imports System.Globalization
+Imports System.IO
+Imports System.Text
+Imports System.Text.RegularExpressions
+Imports System.Web.Script.Serialization
+Imports System.Windows.Forms
+
+AddVbFile "ConfirmatContext.vb"
+AddVbFile "ConfirmatConfig.vb"
+AddVbFile "ConfirmatDialog.vb"
+AddVbFile "ConfirmatSketches.vb"
+AddVbFile "ConfirmatHoles.vb"
+
+Public Class ThisRule
+    Public Sub Main()
+        app = ThisApplication
+        reserved.Clear()
+        Dim logPath As String = System.IO.Path.Combine(ProjectRoot, "02_confirmat_ilogic.log")
+        Dim transaction As Inventor.Transaction = Nothing
+        Dim previousScreen As Boolean = app.ScreenUpdating
+        Using writer As New StreamWriter(logPath, False, New UTF8Encoding(False))
+            log = writer
+            Try
+                WriteLog("02 Конфирмат Native. " & DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"))
+                If app.ActiveDocument Is Nothing OrElse app.ActiveDocument.DocumentType <> DocumentTypeEnum.kPartDocumentObject Then
+                    Throw New Exception("Откройте деталь .ipt и выберите плоские грани для присадки.")
+                End If
+                part = DirectCast(app.ActiveDocument, PartDocument)
+                comp = part.ComponentDefinition
+                tg = app.TransientGeometry
+                factory = app.TransientObjects
+                Dim faces As List(Of Face) = SelectedFaces()
+                LoadConfig()
+                Dim chosen() As String = ChooseParameters()
+                If chosen Is Nothing Then Return
+                Dim thickness As String = chosen(0), edgeOffset As String = chosen(1), countName As String = chosen(2)
+                Dim countParameter As Inventor.Parameter = comp.Parameters.Item(countName)
+                Dim count As Integer = ConfirmatCount(CDbl(countParameter.Value))
+                If CDbl(comp.Parameters.Item(thickness).Value) <= 0 Then Throw New Exception("Толщина должна быть положительной.")
+                Dim edgeValue As Double = CDbl(comp.Parameters.Item(edgeOffset).Value)
+                If edgeValue < 0 Then Throw New Exception("Отступ от кромки не должен быть отрицательным.")
+                ' Как в 02: глубина широкого участка равна выбранной толщине.
+                For Each key As String In New String() {"outer_2pcs", "outer_3pcs"}
+                    Dim values As Dictionary(Of String, Object) = Block(st, key)
+                    values("depth") = thickness
+                    st(key) = values
+                Next
+                Dim required As List(Of String) = RequiredParameters(thickness, edgeOffset)
+                For Each name As String In required
+                    Dim parameter As Inventor.Parameter = comp.Parameters.Item(name)
+                Next
+                Dim groups As New Dictionary(Of String, List(Of Face))
+                For Each face As Face In faces
+                    Dim key As String = PlaneKey(face)
+                    If Not groups.ContainsKey(key) Then groups(key) = New List(Of Face)
+                    groups(key).Add(face)
+                Next
+                transaction = app.TransactionManager.StartTransaction(part, "02 Конфирмат — iLogic Native")
+                EnsureKeep(required)
+                EnsureCountKeep(countParameter)
+                Dim total As Stopwatch = Stopwatch.StartNew(), phase As Stopwatch = Stopwatch.StartNew()
+                app.ScreenUpdating = False
+                Dim jobs As List(Of SketchJob) = BuildSketches(groups, thickness, edgeOffset, edgeValue)
+                LogStage("Все эскизы", phase)
+                ' Исходные грани больше не используются после начала сверления.
+                BuildHoles(jobs, countParameter)
+                LogStage("Все отверстия", phase)
+                part.Update()
+                LogStage("Обновление документа", phase)
+                transaction.End()
+                transaction = Nothing
+                app.ScreenUpdating = previousScreen
+                total.Stop()
+                WriteLog("Общее время построения: " & Seconds(total) & "s")
+                log.Flush()
+                MessageBox.Show("Присадка конфирматов создана. Количество: " & count.ToString() & vbCrLf &
+                                "Время построения: " & Seconds(total) & " с" & vbCrLf & "Журнал: " & logPath, "02 — iLogic Native")
+            Catch ex As Exception
+                WriteLog("ОШИБКА: " & ex.ToString())
+                If transaction IsNot Nothing Then
+                    Try
+                        transaction.Abort()
+                    Catch abortError As Exception
+                        WriteLog("Откат: " & abortError.Message)
+                    End Try
+                End If
+                log.Flush()
+                MessageBox.Show(ex.Message & vbCrLf & "Подробности: " & logPath, "02 — ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            Finally
+                app.ScreenUpdating = previousScreen
+            End Try
+        End Using
+    End Sub
+End Class

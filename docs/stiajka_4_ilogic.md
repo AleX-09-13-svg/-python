@@ -1,7 +1,12 @@
 # Четыре стяжки — iLogic
 
-Правило: `scripts/Создание присадки/Stiajka_4_inch.iLogicVb`.
-Исходное правило `Stiajka_2_inch.iLogicVb` сохранено.
+Правило: `ilogic/Stiajka/Stiajka_4_inch.iLogicVb`.
+Вариант `Stiajka_2_inch.iLogicVb` находится в той же папке.
+
+Добавьте папку `ilogic/Stiajka` в «Конфигурация iLogic → Внешние папки правил».
+Главное правило подключает общие модули и `Stiajka_4_Layout.vb` через `AddVbFile`.
+Если правило уже добавлено в Inventor, замените старый путь новым.
+Структура и запуск модулей: [инструкция](../ilogic/Stiajka/README.md).
 
 В открытой детали `.ipt` выберите две смежные плоские грани, как для правила 05,
 запустите новое внешнее правило и выберите параметр отступа.
@@ -32,5 +37,5 @@
 Проверка компиляции и расчётов без запуска модели:
 
 ```powershell
-python -X utf8 -B scripts/validate_ilogic_native.py --rule "scripts/Создание присадки/Stiajka_4_inch.iLogicVb" --smoke
+python -X utf8 -B scripts/validate_ilogic_native.py --rule "ilogic/Stiajka/Stiajka_4_inch.iLogicVb" --smoke
 ```

@@ -2,13 +2,14 @@
 import argparse
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
 
 
 ROOT = Path(__file__).resolve().parents[1]
-RULE = ROOT / "scripts" / "Создание присадки" / "Stiajka_2_inch.iLogicVb"
+RULE = ROOT / "ilogic" / "Stiajka" / "Stiajka_2_inch.iLogicVb"
 
 
 SMOKE_METHOD = '''
@@ -165,6 +166,33 @@ def smoke_check(output, interop, four=False, one=False, confirmat=False):
     print("Native JSON/settings match Python; spacing and short-face validation OK. No Inventor model was run.")
 
 
+def read_rule_sources(rule):
+    """Resolve AddVbFile beside each source for standalone compiler validation.
+
+    Inventor's external-rule search folders must still be configured separately.
+    Each file remains a separate compilation unit, preserving its Imports scope.
+    """
+    sources = {}
+
+    def visit(path):
+        path = path.resolve()
+        if path in sources:
+            return
+        lines = path.read_text(encoding="utf-8-sig").splitlines()
+        sources[path] = ""
+        code = []
+        for line in lines:
+            match = re.fullmatch(r'\s*AddVbFile\s+"([^"]+)"\s*', line, re.IGNORECASE)
+            if match:
+                visit(path.parent / match.group(1))
+            elif not line.lstrip().lower().startswith("addreference "):
+                code.append(line)
+        sources[path] = "\n".join(code)
+
+    visit(rule)
+    return list(sources.values())
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--rule", type=Path, default=RULE)
@@ -177,11 +205,12 @@ def main():
     interop = args.inventor_dir / "Bin" / "Public Assemblies" / "Autodesk.Inventor.Interop.dll"
     if not compiler.exists() or not interop.exists():
         parser.error("Нужны Windows, компилятор .NET Framework и Autodesk.Inventor.Interop.dll.")
-    source = "\n".join(line for line in args.rule.read_text(encoding="utf-8-sig").splitlines()
-                       if not line.startswith("AddReference "))
-    four = "Private Const TieCount As Integer = 4" in source
-    one = "Private Const TieCount As Integer = 1" in source
-    confirmat = 'Private Const Workflow As String = "confirmat"' in source
+    sources = read_rule_sources(args.rule)
+    source = sources[0]
+    combined = "\n".join(sources)
+    four = "Private Const TieCount As Integer = 4" in combined
+    one = "Private Const TieCount As Integer = 1" in combined
+    confirmat = 'Private Const Workflow As String = "confirmat"' in combined
     # ThisApplication предоставляет iLogic. Для проверки вне iLogic нужна
     # только декларация свойства; сам Inventor и документ не запускаются.
     source = "Imports System\n" + source.replace(
@@ -227,12 +256,17 @@ def main():
                 result("overlapRejected") = overlapRejected
             ''')
         source = source.replace("    Public Sub Main()", method + "\n    Public Sub Main()", 1)
-    with tempfile.NamedTemporaryFile(dir=ROOT / "tests", prefix="_native_check_",
-                                     suffix=".vb", delete=False) as file:
-        check = Path(file.name)
-    output = check.with_suffix(".dll")
+    sources[0] = source
+    checks = []
+    output = None
     try:
-        check.write_text(source, encoding="utf-8-sig")
+        for code in sources:
+            with tempfile.NamedTemporaryFile(dir=ROOT / "tests", prefix="_native_check_",
+                                             suffix=".vb", delete=False) as file:
+                check = Path(file.name)
+            checks.append(check)
+            check.write_text(code, encoding="utf-8-sig")
+        output = checks[0].with_suffix(".dll")
         refs = [interop] + [framework / name for name in (
             "System.dll", "System.Core.dll", "System.Web.Extensions.dll",
             "System.Drawing.dll", "System.Windows.Forms.dll",
@@ -240,7 +274,7 @@ def main():
         command = [str(compiler), "/nologo", "/utf8output", "/target:library",
                    "/optionexplicit+", "/optioninfer+", "/optionstrict-", "/out:" + str(output)]
         command += ["/reference:" + str(ref) for ref in refs]
-        result = subprocess.run(command + [str(check)], capture_output=True, encoding="utf-8", errors="replace")
+        result = subprocess.run(command + [str(check) for check in checks], capture_output=True, encoding="utf-8", errors="replace")
         if result.stdout:
             print(result.stdout)
         if result.stderr:
@@ -251,9 +285,10 @@ def main():
                 smoke_check(output, interop, four, one, confirmat)
         return result.returncode
     finally:
-        # Только два файла, созданные этим запуском; без рекурсивного удаления.
-        check.unlink(missing_ok=True)
-        output.unlink(missing_ok=True)
+        for check in checks:
+            check.unlink(missing_ok=True)
+        if output is not None:
+            output.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

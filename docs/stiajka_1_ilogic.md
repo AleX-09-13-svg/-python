@@ -1,6 +1,11 @@
 # Пара стяжка–шкант по центру
 
-Правило: `scripts/Создание присадки/Stiajka_1_inch.iLogicVb`.
+Правило: `ilogic/Stiajka/Stiajka_1_inch.iLogicVb`.
+
+Добавьте папку `ilogic/Stiajka` в «Конфигурация iLogic → Внешние папки правил».
+Главное правило подключает общие модули и `Stiajka_1_Layout.vb` через `AddVbFile`.
+Если правило уже добавлено в Inventor, замените старый путь новым.
+Структура и запуск модулей: [инструкция](../ilogic/Stiajka/README.md).
 
 В детали `.ipt` выберите две смежные плоские грани, как для 05, и запустите
 внешнее правило. Выбор отступа от краёв не требуется: середина пары закреплена
@@ -24,5 +29,5 @@
 Проверка компиляции и расчётов без запуска модели:
 
 ```powershell
-python -X utf8 -B scripts/validate_ilogic_native.py --rule "scripts/Создание присадки/Stiajka_1_inch.iLogicVb" --smoke
+python -X utf8 -B scripts/validate_ilogic_native.py --rule "ilogic/Stiajka/Stiajka_1_inch.iLogicVb" --smoke
 ```

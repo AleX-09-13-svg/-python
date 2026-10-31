@@ -1,0 +1,110 @@
+﻿' One centered tie and one dowel, 32 mm apart. Based on Stiajka_4_inch.
+AddReference "System.Web.Extensions.dll"
+AddReference "System.Drawing.dll"
+AddReference "System.Windows.Forms.dll"
+Imports Inventor
+Imports System.Collections.Generic
+Imports System.Diagnostics
+Imports System.Globalization
+Imports System.IO
+Imports System.Text
+Imports System.Text.RegularExpressions
+Imports System.Web.Script.Serialization
+Imports System.Windows.Forms
+
+AddVbFile "StiajkaContext.vb"
+AddVbFile "StiajkaConfig.vb"
+AddVbFile "StiajkaSelection.vb"
+AddVbFile "StiajkaSketches.vb"
+AddVbFile "StiajkaHoles.vb"
+AddVbFile "Stiajka_1_Layout.vb"
+
+Public Class ThisRule
+    Private Const Prefix As String = "DrillingSketch_1pc"
+    Private Const TieCount As Integer = 1
+
+    Public Sub Main()
+        app = ThisApplication
+        bodies.Clear()
+        reserved.Clear()
+        Dim logPath As String = System.IO.Path.Combine(ProjectRoot, "stiajka_1_ilogic.log")
+        Dim transaction As Inventor.Transaction = Nothing
+        Dim previousScreen As Boolean = app.ScreenUpdating
+        Dim total As Stopwatch = Nothing
+        Using writer As New StreamWriter(logPath, False, New UTF8Encoding(False))
+            log = writer
+            Try
+                WriteLog("Стяжка 1 шт. iLogic Native. " & DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"))
+                If app.ActiveDocument Is Nothing OrElse app.ActiveDocument.DocumentType <> DocumentTypeEnum.kPartDocumentObject Then
+                    Throw New Exception("Откройте деталь .ipt и выберите по две грани каждого тела.")
+                End If
+                part = DirectCast(app.ActiveDocument, PartDocument)
+                comp = part.ComponentDefinition
+                tg = app.TransientGeometry
+                factory = app.TransientObjects
+                Dim phase As Stopwatch = Stopwatch.StartNew()
+                Dim jobs As List(Of PairJob) = SelectedPairs()
+                LoadConfig()
+                LogStage("Грани, общее ребро и настройки", phase)
+                phase.Restart()
+                Dim offsetParam As String = SettingParameter("offset", "Стяжка_отступ")
+                Dim required As List(Of String) = RequiredParameters()
+                For Each name As String In required
+                    Try
+                        Dim parameter As Inventor.Parameter = comp.Parameters.Item(name)
+                    Catch
+                        Throw New Exception("В детали отсутствует параметр: " & name)
+                    End Try
+                Next
+                Dim offsetValue As Double = CDbl(comp.Parameters.Item(offsetParam).Value)
+                If offsetValue <= 0 Then Throw New Exception("Отступ чашки стяжки от общего ребра должен быть положительным.")
+                For Each job As PairJob In jobs
+                    Dim length As Double = job.Common.StartVertex.Point.DistanceTo(job.Common.StopVertex.Point)
+                    ValidateLayout(length)
+                    WriteLog("Centered tie; edge length: " & Rounded(length * 10) & " mm")
+                Next
+                LogStage("Проверка параметров и чтение значений", phase)
+                transaction = app.TransactionManager.StartTransaction(part, "Одна стяжка — iLogic Native")
+                EnsureKeep(required)
+                LogStage("Подготовка Keep_Excel_Params", phase)
+                total = Stopwatch.StartNew()
+                phase.Restart()
+                app.ScreenUpdating = False
+                BuildSketches(jobs, offsetParam, offsetValue, phase)
+                ' До этого места отверстий нет: исходные ссылки на грани ещё действительны.
+                For Each job As PairJob In jobs
+                    job.Neighbor = FindNeighbor(job)
+                Next
+                LogStage("Поиск соседних тел", phase)
+                BuildHoles(jobs)
+                LogStage("Все отверстия", phase)
+                part.Update()
+                LogStage("Обновление документа", phase)
+                transaction.End()
+                transaction = Nothing
+                app.ScreenUpdating = previousScreen
+                total.Stop()
+                WriteLog("05: Общее время построения: " & Seconds(total) & "s")
+                WriteLog("05: Готово. Пар граней: " & jobs.Count.ToString())
+                log.Flush()
+                MessageBox.Show("Присадка для одной стяжки создана." & vbCrLf & "Время построения: " & Seconds(total) & " с" &
+                                vbCrLf & "Журнал: " & logPath, "Одна стяжка — iLogic Native")
+            Catch ex As Exception
+                WriteLog("ОШИБКА: " & ex.ToString())
+                If transaction IsNot Nothing Then
+                    Try
+                        transaction.Abort()
+                        WriteLog("Изменения этого запуска отменены.")
+                    Catch rollback As Exception
+                        WriteLog("Ошибка отмены: " & rollback.ToString())
+                    End Try
+                End If
+                log.Flush()
+                app.ScreenUpdating = previousScreen
+                MessageBox.Show(ex.Message & vbCrLf & "Подробности: " & logPath, "Одна стяжка — ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            Finally
+                app.ScreenUpdating = previousScreen
+            End Try
+        End Using
+    End Sub
+End Class

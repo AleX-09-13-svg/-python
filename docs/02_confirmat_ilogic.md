@@ -1,9 +1,41 @@
 # Конфирматы 02 — нативное правило iLogic
 
-Файл: `scripts/Создание присадки/02_Confirmat_Native.iLogicVb`.
+Файл запуска: `ilogic/Confirmat/Confirmat_Native.iLogicVb`.
 Правило работает внутри Inventor и не запускает Python.
 
+## Структура
+
+Все файлы находятся в `ilogic/Confirmat`:
+
+| Файл | Назначение |
+| --- | --- |
+| `Confirmat_Native.iLogicVb` | Main: порядок действий, транзакция, обработка ошибок |
+| `ConfirmatContext.vb` | Общие поля ThisRule, данные SketchJob, имена, журнал и оформление |
+| `ConfirmatConfig.vb` | JSON, имена и проверка параметров, выражения Keep |
+| `ConfirmatDialog.vb` | Окно выбора параметров |
+| `ConfirmatSketches.vb` | Выбор граней, рабочие плоскости, эскизы и точки |
+| `ConfirmatHoles.vb` | Отверстия, затрагиваемые тела и условие подавления |
+
+Файлы `.vb` подключаются главным правилом через `AddVbFile` как Straight VB code.
+Они содержат части одного класса `ThisRule` (`Partial Public Class ThisRule`):
+поля и закрытые методы доступны всем частям, отдельный объект контекста не создаётся.
+Самостоятельно запускать `.vb` не нужно. При переносе правила копируйте всю папку.
+Предыдущий файл `scripts/Создание присадки/Confirmat_Native.iLogicVb` перенесён;
+если он был добавлен в браузер внешних правил Inventor, замените ссылку новым путём.
+
+Источник настроек сохранён: `part_config.example.json` из соседнего проекта
+`01_inventor_service/service/excel_parameters`. Как и раньше, перед ним читается
+необязательный `settings.json` из корня Python-проекта, если он существует;
+при совпадении ключей приоритет у библиотеки. Python для чтения настроек не запускается.
+Путь `ProjectRoot` в `ConfirmatContext.vb` по-прежнему задаёт корень проекта,
+от которого вычисляется путь к JSON и журналу.
+
 ## Запуск
+
+В конфигурации iLogic добавьте полный путь к `ilogic/Confirmat` в каталоги внешних
+правил (External Rule Directories). `AddVbFile` использует поиск внешних правил;
+одного соседства файлов с главным правилом недостаточно. Главное правило запускайте
+как обычное iLogic-правило, без включения Straight VB code для него.
 
 1. Откройте деталь `.ipt`.
 2. Выберите плоские грани для присадки, как для `02_confirmat.py`.
@@ -48,9 +80,11 @@
 ## Проверка
 
 ```powershell
-python -X utf8 -B scripts/validate_ilogic_native.py --rule "scripts/Создание присадки/02_Confirmat_Native.iLogicVb" --smoke
+python -X utf8 -B scripts/validate_ilogic_native.py --rule "ilogic/Confirmat/Confirmat_Native.iLogicVb" --smoke
 ```
 
+Валидатор разрешает `AddVbFile` относительно каталога исходного файла и компилирует
+все части вместе, сохраняя отдельную область Imports для каждого файла.
 Компиляция проверяет сигнатуры установленного Inventor 2023. Проверка .NET
 сравнивает настройки с Python и проверяет расчёты без изменения документа.
 Построение геометрии и переключение подавления нужно проверить на детали в Inventor.
