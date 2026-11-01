@@ -52,6 +52,83 @@ SMOKE_METHOD = '''
 '''
 
 
+PETLI_SMOKE_METHOD = '''
+    Private Function ValidationSegments(width As Double, height As Double, rotated As Boolean) As List(Of XY())
+        Dim corners As XY() = {New XY(0, 0), New XY(width, 0), New XY(width, height), New XY(0, height)}
+        Dim result As New List(Of XY())
+        For i As Integer = 0 To 3
+            result.Add(New XY() {ValidationTransform(corners(i), rotated), ValidationTransform(corners((i + 1) Mod 4), rotated)})
+        Next
+        Return result
+    End Function
+
+    Private Function ValidationTransform(p As XY, rotated As Boolean) As XY
+        If Not rotated Then Return p
+        Return New XY(p.X * 0.6 - p.Y * 0.8 + 13, p.X * 0.8 + p.Y * 0.6 - 9)
+    End Function
+
+    Private Function ValidationReject(action As Action) As Boolean
+        Try
+            action()
+            Return False
+        Catch
+            Return True
+        End Try
+    End Function
+
+    Public Function ValidationSnapshot() As String
+        Dim result As New Dictionary(Of String, Object)
+        Dim counts As New List(Of Integer)
+        For Each height As Double In New Double() {999.999, 1000, 1599.999, 1600, 1999.999, 2000, 2500}
+            counts.Add(HingeCount(height))
+        Next
+        result("counts") = counts
+        Dim cases As New List(Of Object)
+        For Each height As Double In New Double() {90, 100, 120, 160, 200, 240}
+            For Each sideX As Double In New Double() {-1, 61}
+                For Each rotated As Boolean In New Boolean() {False, True}
+                    Dim segments As List(Of XY()) = ValidationSegments(60, height, rotated)
+                    Dim origin As XY = ValidationTransform(New XY(sideX, 0), rotated)
+                    Dim direction As XY = If(rotated, New XY(-0.8, 0.6), New XY(0, 1))
+                    Dim f As Frame = RectangleFrame(segments, origin, direction)
+                    Dim positions As Double() = FacadePositions(f, 3.5, 0.2)
+                    Dim cups As New List(Of Double()), pilots As New List(Of Double())
+                    For Each t As Double In positions
+                        Dim center As XY = f.At(t, 2.2)
+                        cups.Add(New Double() {center.X, center.Y})
+                        For Each sign As Double In New Double() {-1, 1}
+                            Dim pilot As XY = f.At(t + sign * 2.25, 3.15)
+                            pilots.Add(New Double() {pilot.X, pilot.Y})
+                        Next
+                    Next
+                    Dim projected As New List(Of XY) From {ValidationTransform(New XY(sideX, 15), rotated), ValidationTransform(New XY(sideX, height - 15), rotated)}
+                    Dim rows As List(Of SideRow) = SideRows(f, projected, 0.2)
+                    Dim sidePoints As New List(Of Double())
+                    For Each row As SideRow In rows
+                        sidePoints.Add(New Double() {row.First.X, row.First.Y})
+                        sidePoints.Add(New Double() {row.Last.X, row.Last.Y})
+                    Next
+                    cases.Add(New Dictionary(Of String, Object) From {
+                        {"height", height}, {"sideX", sideX}, {"rotated", rotated}, {"positions", positions},
+                        {"cups", cups}, {"pilots", pilots}, {"sidePoints", sidePoints}, {"edge", f.Index}})
+                Next
+            Next
+        Next
+        result("cases") = cases
+        Dim standard As Frame = RectangleFrame(ValidationSegments(60, 180, False), New XY(-1, 0), New XY(0, 1))
+        Dim narrow As Frame = RectangleFrame(ValidationSegments(5.2, 180, False), New XY(-1, 0), New XY(0, 1))
+        Dim shortFace As Frame = RectangleFrame(ValidationSegments(60, 20, False), New XY(-1, 0), New XY(0, 1))
+        result("ambiguousRejected") = ValidationReject(Sub() RectangleFrame(ValidationSegments(60, 180, False), New XY(30, 0), New XY(0, 1)))
+        result("shortRejected") = ValidationReject(Sub() FacadePositions(shortFace, 3.5, 0.2))
+        result("pilotOverlapRejected") = ValidationReject(Sub() FacadePositions(standard, 3.5, 2))
+        result("sideDepthRejected") = ValidationReject(Sub() SideRows(narrow, New List(Of XY) From {New XY(-1, 15)}, 0.2))
+        result("sideOverlapRejected") = ValidationReject(Sub() SideRows(standard, New List(Of XY) From {New XY(-1, 15), New XY(-1, 15.1)}, 0.2))
+        result("sideHeightRejected") = ValidationReject(Sub() SideRows(standard, New List(Of XY) From {New XY(-1, 0.05)}, 0.2))
+        Return New System.Web.Script.Serialization.JavaScriptSerializer().Serialize(result)
+    End Function
+'''
+
+
 CONFIRMAT_SMOKE_METHOD = '''
     Public Function ValidationSnapshot() As String
         Using memory As New System.IO.MemoryStream()
@@ -95,7 +172,7 @@ CONFIRMAT_SMOKE_METHOD = '''
 '''
 
 
-def smoke_check(output, interop, four=False, one=False, confirmat=False):
+def smoke_check(output, interop, four=False, one=False, confirmat=False, petli=False):
     def literal(path):
         return "'" + str(path).replace("'", "''") + "'"
 
@@ -114,6 +191,9 @@ def smoke_check(output, interop, four=False, one=False, confirmat=False):
         raise RuntimeError(result.stderr or result.stdout)
     snapshot = json.loads(result.stdout.strip().lstrip("\ufeff"))
     sys.path.insert(0, str(ROOT))
+    if petli:
+        check_petli_snapshot(snapshot)
+        return
     from common.settings import load_settings
     if confirmat:
         settings = load_settings()["confirmat"]
@@ -193,6 +273,45 @@ def read_rule_sources(rule):
     return list(sources.values())
 
 
+def check_petli_snapshot(snapshot):
+    from petli.layout import calculate_layout, hinge_count, pilot_positions, side_hole_rows
+
+    def close(actual, expected):
+        if isinstance(expected, (list, tuple)):
+            assert len(actual) == len(expected), (actual, expected)
+            for a, b in zip(actual, expected):
+                close(a, b)
+        else:
+            assert abs(actual - expected) < 1e-8, (actual, expected)
+
+    assert snapshot["counts"] == [hinge_count(h) for h in (999.999, 1000, 1599.999, 1600, 1999.999, 2000, 2500)]
+    assert len(snapshot["cases"]) == 24
+    for case in snapshot["cases"]:
+        height, side_x, rotated = case["height"], case["sideX"], case["rotated"]
+
+        def transform(p):
+            x, y = p
+            return (x * .6 - y * .8 + 13, x * .8 + y * .6 - 9) if rotated else p
+
+        corners = [(0, 0), (60, 0), (60, height), (0, height)]
+        segments = [(transform(corners[i]), transform(corners[(i + 1) % 4])) for i in range(4)]
+        frame = calculate_layout(segments, transform((side_x, 0)), (-.8, .6) if rotated else (0, 1), 3.5)
+
+        def at(t, offset):
+            return tuple(frame.start[i] + frame.along[i] * t + frame.inward[i] * offset for i in range(2))
+
+        assert case["edge"] == frame.edge_index
+        close(case["positions"], frame.distances)
+        close(case["cups"], [at(t, 2.2) for t in frame.distances])
+        close(case["pilots"], [at(t, offset) for t, offset in pilot_positions(frame, 3.5, .2)])
+        rows = side_hole_rows(frame, [transform((side_x, t)) for t in (15, height - 15)], .2)
+        close(case["sidePoints"], [p for row in rows for p in row[1:]])
+    for key in ("ambiguousRejected", "shortRejected", "pilotOverlapRejected", "sideDepthRejected",
+                "sideOverlapRejected", "sideHeightRejected"):
+        assert snapshot[key], key
+    print("Petli matches Python in 24 layouts: cups, pilots, side holes, thresholds and 6 invalid cases. No Inventor model was run.")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--rule", type=Path, default=RULE)
@@ -211,6 +330,7 @@ def main():
     four = "Private Const TieCount As Integer = 4" in combined
     one = "Private Const TieCount As Integer = 1" in combined
     confirmat = 'Private Const Workflow As String = "confirmat"' in combined
+    petli = 'Private Const Workflow As String = "petli"' in combined
     # ThisApplication предоставляет iLogic. Для проверки вне iLogic нужна
     # только декларация свойства; сам Inventor и документ не запускаются.
     source = "Imports System\n" + source.replace(
@@ -218,7 +338,7 @@ def main():
         "Public Class ThisRule\n    Public Property ThisApplication As Inventor.Application", 1,
     )
     if args.smoke:
-        method = CONFIRMAT_SMOKE_METHOD if confirmat else SMOKE_METHOD
+        method = PETLI_SMOKE_METHOD if petli else CONFIRMAT_SMOKE_METHOD if confirmat else SMOKE_METHOD
         if one:
             method = method.replace('result("span64") = PointSpan(12, 2)', '''
                 result("centers") = CenterPositions(12)
@@ -282,7 +402,7 @@ def main():
         if result.returncode == 0:
             print("VB.NET compilation OK against " + str(interop))
             if args.smoke:
-                smoke_check(output, interop, four, one, confirmat)
+                smoke_check(output, interop, four, one, confirmat, petli)
         return result.returncode
     finally:
         for check in checks:

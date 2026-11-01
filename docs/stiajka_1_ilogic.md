@@ -3,7 +3,7 @@
 Правило: `ilogic/Stiajka/Stiajka_1_inch.iLogicVb`.
 
 Добавьте папку `ilogic/Stiajka` в «Конфигурация iLogic → Внешние папки правил».
-Главное правило подключает общие модули и `Stiajka_1_Layout.vb` через `AddVbFile`.
+Главное правило подключает общие модули и `Modules/Stiajka_1_Layout.vb` через `AddVbFile`.
 Если правило уже добавлено в Inventor, замените старый путь новым.
 Структура и запуск модулей: [инструкция](../ilogic/Stiajka/README.md).
 

@@ -21,16 +21,16 @@
 iLogicVb.RunExternalRule("D:\Копия Google диска\02_Скрипты\01_Скрипты для работы\For Inventor\Присадка кодом Python\ilogic\Stiajka\Stiajka_2_inch.iLogicVb")
 ```
 
-Либо скопируйте содержимое главного файла, включая `AddReference`, `Imports`, `AddVbFile` и `Public Class ThisRule`, в редактор нового правила. Подключаемые `.vb` должны оставаться в настроенной внешней папке. Главное правило запускается без включения Straight VB code; модули содержат обычный VB.NET и отдельно не запускаются.
+Либо скопируйте содержимое главного файла, включая `AddReference`, `Imports`, `AddVbFile` и `Public Class ThisRule`, в редактор нового правила. Подключаемые `.vb` должны оставаться в подпапке `Modules` настроенной внешней папки. Главное правило запускается без включения Straight VB code; модули содержат обычный VB.NET и отдельно не запускаются.
 
-Если папка проекта перенесена, измените константу `ProjectRoot` в `StiajkaContext.vb`. При переносе копируйте всю папку `ilogic/Stiajka`.
+Если папка проекта перенесена, измените константу `ProjectRoot` в `Modules/StiajkaContext.vb`. При переносе копируйте всю папку `ilogic/Stiajka`.
 
 ## Настройки и результат
 
 Правило читает тот же библиотечный JSON:
 
 ```text
-..\01_inventor_service\service\excel_parameters\part_config.example.json
+..\01_inventor_service\service\excel_parameters\drilling_config.json
 ```
 
 Если существует локальный `settings.json`, он служит резервом; значения библиотечного файла имеют приоритет. Сопоставление `linked_parameters` переводит имена из JSON в реальные имена параметров детали.

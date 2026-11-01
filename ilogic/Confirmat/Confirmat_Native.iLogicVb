@@ -12,11 +12,11 @@ Imports System.Text.RegularExpressions
 Imports System.Web.Script.Serialization
 Imports System.Windows.Forms
 
-AddVbFile "ConfirmatContext.vb"
-AddVbFile "ConfirmatConfig.vb"
-AddVbFile "ConfirmatDialog.vb"
-AddVbFile "ConfirmatSketches.vb"
-AddVbFile "ConfirmatHoles.vb"
+AddVbFile "Modules\ConfirmatContext.vb"
+AddVbFile "Modules\ConfirmatConfig.vb"
+AddVbFile "Modules\ConfirmatDialog.vb"
+AddVbFile "Modules\ConfirmatSketches.vb"
+AddVbFile "Modules\ConfirmatHoles.vb"
 
 Public Class ThisRule
     Public Sub Main()

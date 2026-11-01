@@ -1,0 +1,111 @@
+﻿' Модульный эквивалент 07_Petli.py. Обычное внешнее правило iLogic.
+AddReference "System.Windows.Forms.dll"
+Imports Inventor
+Imports System.Collections.Generic
+Imports System.Diagnostics
+Imports System.Globalization
+Imports System.IO
+Imports System.Text
+Imports System.Windows.Forms
+
+AddVbFile "Modules\PetliContext.vb"
+AddVbFile "Modules\PetliGeometry.vb"
+AddVbFile "Modules\PetliLayout.vb"
+AddVbFile "Modules\PetliSketches.vb"
+AddVbFile "Modules\PetliFacade.vb"
+AddVbFile "Modules\PetliSide.vb"
+AddVbFile "Modules\PetliHoles.vb"
+
+Public Class ThisRule
+    Public Sub Main()
+        app = ThisApplication
+        reserved.Clear()
+        Dim logPath As String = System.IO.Path.Combine(ProjectRoot, "07_Petli_ilogic.log")
+        Dim transaction As Inventor.Transaction = Nothing
+        Dim previousScreen As Boolean = app.ScreenUpdating
+        Using writer As New StreamWriter(logPath, False, New UTF8Encoding(False))
+            log = writer
+            Dim total As Stopwatch = Stopwatch.StartNew(), phase As Stopwatch = Stopwatch.StartNew()
+            Try
+                WriteLog("07 Петли iLogic. " & DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"))
+                If app.ActiveDocument Is Nothing OrElse app.ActiveDocument.DocumentType <> DocumentTypeEnum.kPartDocumentObject Then
+                    Throw New Exception("Откройте .ipt-деталь и выберите фасад, затем боковину.")
+                End If
+                part = DirectCast(app.ActiveDocument, PartDocument)
+                comp = part.ComponentDefinition
+                tg = app.TransientGeometry : factory = app.TransientObjects
+                If part.SelectSet.Count <> 2 Then Throw New Exception("Выберите с Ctrl ровно две грани: сначала фасад, затем боковину.")
+                Dim facade As Face = TryCast(part.SelectSet.Item(1), Face)
+                Dim side As Face = TryCast(part.SelectSet.Item(2), Face)
+                If facade Is Nothing OrElse side Is Nothing Then Throw New Exception("Выберите две грани детали.")
+                If Not TypeOf facade.Geometry Is Plane OrElse Not TypeOf side.Geometry Is Plane Then Throw New Exception("Обе грани должны быть плоскими.")
+                Dim facadeBody As SurfaceBody = facade.SurfaceBody, sideBody As SurfaceBody = side.SurfaceBody
+                If Not facadeBody.IsSolid OrElse Not sideBody.IsSolid Then Throw New Exception("Обе грани должны принадлежать твёрдым телам.")
+                Dim facadeName As String = facadeBody.Name, sideName As String = sideBody.Name
+                Dim values As New Dictionary(Of String, Double)
+                Dim checkedUnits As New HashSet(Of String)
+                Dim units As UnitsOfMeasure = part.UnitsOfMeasure
+                For Each name As String In New String() {CupD, CupH, PilotD, PilotH}
+                    Dim parameter As Inventor.Parameter = Nothing
+                    Try
+                        parameter = comp.Parameters.Item(name)
+                    Catch ex As Exception
+                        Throw New Exception("В детали отсутствует параметр: " & name, ex)
+                    End Try
+                    Try
+                        Dim unitName As String = parameter.Units
+                        If checkedUnits.Add(unitName) Then units.ConvertUnits(1, unitName, "cm")
+                    Catch ex As Exception
+                        Throw New Exception("Параметр должен иметь единицы длины: " & name, ex)
+                    End Try
+                    Dim value As Double = CDbl(parameter.Value)
+                    If Not Positive(value) Then Throw New Exception("Параметр должен быть положительным: " & name)
+                    values(name) = value
+                Next
+                Dim origin() As Double = Nothing, direction() As Double = Nothing
+                Intersection(DirectCast(facade.Geometry, Plane), DirectCast(side.Geometry, Plane), origin, direction)
+                LogStage("Подготовка", phase)
+                transaction = app.TransactionManager.StartTransaction(part, "07 Петли — iLogic")
+                app.ScreenUpdating = False
+                Dim first As Job = BuildFacade(facade, side, origin, direction, values(CupD), values(PilotD))
+                Dim facadeDirection As PartFeatureExtentDirectionEnum = DrillingDirection(first.Sketch, facade)
+                LogStage("Эскиз фасада", phase)
+                Dim second As Job = BuildSide(side, first.Points, origin, direction, values(PilotD))
+                Dim sideDirection As PartFeatureExtentDirectionEnum = DrillingDirection(second.Sketch, side)
+                LogStage("Эскиз боковины", phase)
+                ' Подготовить центры до изменения топологии; координаты повторно не читаются.
+                Dim cups As ObjectCollection = Centers(first.Points)
+                Dim pilots As ObjectCollection = Centers(first.Pilots)
+                Dim sidePilots As ObjectCollection = Centers(second.Points)
+                Dim holes As HoleFeatures = comp.Features.HoleFeatures
+                ' После начала сверления исходные грани больше не используются.
+                AddHoles(holes, cups, CupD, CupH, facadeDirection, "Petli_Holes", facadeName)
+                AddHoles(holes, pilots, PilotD, PilotH, facadeDirection, "Petli_Nakolki", facadeName)
+                AddHoles(holes, sidePilots, PilotD, PilotH, sideDirection, "Petli_Side_Nakolki", sideName)
+                LogStage("Все отверстия", phase)
+                first.Sketch.Visible = False : second.Sketch.Visible = False
+                part.Update()
+                LogStage("Обновление документа", phase)
+                transaction.End() : transaction = Nothing
+                WriteLog("Петель: " & first.Points.Count.ToString() & "; наколок фасада: " & first.Pilots.Count.ToString() &
+                         "; наколок боковины: " & second.Points.Count.ToString())
+                WriteLog("Общее время: " & Seconds(total) & "s")
+                app.ScreenUpdating = previousScreen
+                MessageBox.Show("Присадка петель создана. Петель: " & first.Points.Count.ToString() & vbCrLf &
+                                "Время: " & Seconds(total) & " с" & vbCrLf & "Журнал: " & logPath, "07 — Петли")
+            Catch ex As Exception
+                WriteLog("ОШИБКА: " & ex.ToString())
+                If transaction IsNot Nothing Then
+                    Try
+                        transaction.Abort()
+                    Catch abortError As Exception
+                        WriteLog("Не удалось отменить изменения: " & abortError.ToString())
+                    End Try
+                End If
+                MessageBox.Show(ex.Message & vbCrLf & "Журнал: " & logPath, "07 — ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            Finally
+                app.ScreenUpdating = previousScreen
+            End Try
+        End Using
+    End Sub
+End Class

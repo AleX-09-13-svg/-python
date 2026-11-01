@@ -13,13 +13,13 @@ Imports System.Text.RegularExpressions
 Imports System.Web.Script.Serialization
 Imports System.Windows.Forms
 
-AddVbFile "StiajkaContext.vb"
-AddVbFile "StiajkaConfig.vb"
-AddVbFile "StiajkaSelection.vb"
-AddVbFile "StiajkaSketches.vb"
-AddVbFile "StiajkaHoles.vb"
-AddVbFile "StiajkaDialog.vb"
-AddVbFile "Stiajka_2_Layout.vb"
+AddVbFile "Modules\StiajkaContext.vb"
+AddVbFile "Modules\StiajkaConfig.vb"
+AddVbFile "Modules\StiajkaSelection.vb"
+AddVbFile "Modules\StiajkaSketches.vb"
+AddVbFile "Modules\StiajkaHoles.vb"
+AddVbFile "Modules\StiajkaDialog.vb"
+AddVbFile "Modules\Stiajka_2_Layout.vb"
 
 Public Class ThisRule
     Private Const Prefix As String = "DrillingSketch"

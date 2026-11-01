@@ -5,16 +5,16 @@
 
 ## Структура
 
-Все файлы находятся в `ilogic/Confirmat`:
+Главное правило находится в `ilogic/Confirmat`, вспомогательные модули — в подпапке `Modules`:
 
 | Файл | Назначение |
 | --- | --- |
 | `Confirmat_Native.iLogicVb` | Main: порядок действий, транзакция, обработка ошибок |
-| `ConfirmatContext.vb` | Общие поля ThisRule, данные SketchJob, имена, журнал и оформление |
-| `ConfirmatConfig.vb` | JSON, имена и проверка параметров, выражения Keep |
-| `ConfirmatDialog.vb` | Окно выбора параметров |
-| `ConfirmatSketches.vb` | Выбор граней, рабочие плоскости, эскизы и точки |
-| `ConfirmatHoles.vb` | Отверстия, затрагиваемые тела и условие подавления |
+| `Modules/ConfirmatContext.vb` | Общие поля ThisRule, данные SketchJob, имена, журнал и оформление |
+| `Modules/ConfirmatConfig.vb` | JSON, имена и проверка параметров, выражения Keep |
+| `Modules/ConfirmatDialog.vb` | Окно выбора параметров |
+| `Modules/ConfirmatSketches.vb` | Выбор граней, рабочие плоскости, эскизы и точки |
+| `Modules/ConfirmatHoles.vb` | Отверстия, затрагиваемые тела и условие подавления |
 
 Файлы `.vb` подключаются главным правилом через `AddVbFile` как Straight VB code.
 Они содержат части одного класса `ThisRule` (`Partial Public Class ThisRule`):
@@ -23,11 +23,11 @@
 Предыдущий файл `scripts/Создание присадки/Confirmat_Native.iLogicVb` перенесён;
 если он был добавлен в браузер внешних правил Inventor, замените ссылку новым путём.
 
-Источник настроек сохранён: `part_config.example.json` из соседнего проекта
+Источник настроек сохранён: `drilling_config.json` из соседнего проекта
 `01_inventor_service/service/excel_parameters`. Как и раньше, перед ним читается
 необязательный `settings.json` из корня Python-проекта, если он существует;
 при совпадении ключей приоритет у библиотеки. Python для чтения настроек не запускается.
-Путь `ProjectRoot` в `ConfirmatContext.vb` по-прежнему задаёт корень проекта,
+Путь `ProjectRoot` в `Modules/ConfirmatContext.vb` по-прежнему задаёт корень проекта,
 от которого вычисляется путь к JSON и журналу.
 
 ## Запуск

@@ -15,6 +15,8 @@
 Все три правила перенесены из `scripts/Создание присадки`: замените пути в
 браузере внешних правил или в своих правилах запуска. Запускайте `.iLogicVb`
 как обычные правила iLogic, без включения Straight VB code для главного правила.
+Вспомогательные файлы находятся в подпапке `Modules`; `AddVbFile` указывает пути
+`Modules\имя.vb`. В каталоги внешних правил добавляется родительская папка.
 Файлы `.vb` подключаются через `AddVbFile` как Straight VB code; отдельно их
 запускать не нужно. При переносе копируйте всю папку.
 
@@ -22,15 +24,15 @@
 
 | Файл | Назначение |
 | --- | --- |
-| `StiajkaContext.vb` | Общие поля, PairJob, Projection, ошибки, имена и журнал |
-| `StiajkaConfig.vb` | JSON, сопоставление имён параметров, выражения Keep |
-| `StiajkaSelection.vb` | Выбор пар граней, общее ребро, поиск соседнего тела |
-| `StiajkaSketches.vb` | Общие операции с эскизами и геометрией |
-| `StiajkaHoles.vb` | Пакеты отверстий, чашки и затрагиваемые тела |
-| `StiajkaDialog.vb` | Выбор отступа для вариантов 2 и 4 |
-| `Stiajka_1_Layout.vb` | Раскладка, размеры и проверки для одной стяжки |
-| `Stiajka_2_Layout.vb` | Раскладка, размеры и проверки для двух стяжек |
-| `Stiajka_4_Layout.vb` | Раскладка, размеры и проверки для четырёх стяжек |
+| `Modules/StiajkaContext.vb` | Общие поля, PairJob, Projection, ошибки, имена и журнал |
+| `Modules/StiajkaConfig.vb` | JSON, сопоставление имён параметров, выражения Keep |
+| `Modules/StiajkaSelection.vb` | Выбор пар граней, общее ребро, поиск соседнего тела |
+| `Modules/StiajkaSketches.vb` | Общие операции с эскизами и геометрией |
+| `Modules/StiajkaHoles.vb` | Пакеты отверстий, чашки и затрагиваемые тела |
+| `Modules/StiajkaDialog.vb` | Выбор отступа для вариантов 2 и 4 |
+| `Modules/Stiajka_1_Layout.vb` | Раскладка, размеры и проверки для одной стяжки |
+| `Modules/Stiajka_2_Layout.vb` | Раскладка, размеры и проверки для двух стяжек |
+| `Modules/Stiajka_4_Layout.vb` | Раскладка, размеры и проверки для четырёх стяжек |
 
 Модули — части одного класса `ThisRule` (`Partial Public Class ThisRule`).
 Каждое главное правило подключает общие части и только свой файл раскладки;
@@ -39,10 +41,10 @@
 
 Общий `PairJob.FirstAxisDirection` используется только вариантом 1.
 Константы `Prefix`, `TieCount` и подписи окна находятся в соответствующих
-главных правилах. Константа `ProjectRoot` — в `StiajkaContext.vb`.
+главных правилах. Константа `ProjectRoot` — в `Modules/StiajkaContext.vb`.
 
 Настройки читаются из прежнего JSON библиотеки
-`../01_inventor_service/service/excel_parameters/part_config.example.json`
+`../01_inventor_service/service/excel_parameters/drilling_config.json`
 относительно корня Python-проекта. Необязательный `settings.json` из корня
 проекта читается первым; библиотечный JSON имеет приоритет. Python не запускается.
 

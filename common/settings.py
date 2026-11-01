@@ -11,7 +11,7 @@ LIBRARY_SETTINGS_PATH = (
     / "01_inventor_service"
     / "service"
     / "excel_parameters"
-    / "part_config.example.json"
+    / "drilling_config.json"
 )
 DEFAULT_DRAWER_EDGE_MAX_CM = 60.0
 

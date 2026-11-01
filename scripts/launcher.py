@@ -9,6 +9,10 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 COMMANDS = {
+    "petli": {
+        "title": "Петли 07",
+        "script": "07_Petli.py",
+    },
     "line_parameter": {
         "title": "Размер выбранных отрезков",
         "script": "06_line_parameter.py",

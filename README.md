@@ -51,7 +51,7 @@ scripts\Создание присадки
 Главный источник истины для технологических настроек присадки находится в подключаемой библиотеке:
 
 ```text
-..\01_inventor_service\service\excel_parameters\part_config.example.json
+..\01_inventor_service\service\excel_parameters\drilling_config.json
 ```
 
 Этот JSON формируется библиотечным проектом из нужного Excel. Из него берутся блоки:
@@ -184,7 +184,7 @@ python -m compileall -q .
 Проверить подключаемый библиотечный JSON:
 
 ```powershell
-python -m json.tool ..\01_inventor_service\service\excel_parameters\part_config.example.json
+python -m json.tool ..\01_inventor_service\service\excel_parameters\drilling_config.json
 ```
 
 Полную функциональную проверку нужно делать в Inventor на копии детали, потому что скрипты создают реальные эскизы и отверстия в активном документе.
