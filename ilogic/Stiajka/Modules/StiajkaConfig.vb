@@ -7,48 +7,32 @@ Imports System.Globalization
 Imports System.IO
 Imports System.Text
 Imports System.Text.RegularExpressions
-Imports System.Web.Script.Serialization
 Imports System.Windows.Forms
 
 Partial Public Class ThisRule
     Private Sub LoadConfig()
-        Dim serializer As New JavaScriptSerializer()
-        config = New Dictionary(Of String, Object)
-        Dim local As String = System.IO.Path.Combine(ProjectRoot, "settings.json")
-        If System.IO.File.Exists(local) Then config = serializer.Deserialize(Of Dictionary(Of String, Object))(System.IO.File.ReadAllText(local, Encoding.UTF8))
-        Dim library As String = System.IO.Path.GetFullPath(System.IO.Path.Combine(ProjectRoot, "..", "01_inventor_service", "service", "excel_parameters", "drilling_config.json"))
-        If System.IO.File.Exists(library) Then
-            Merge(config, serializer.Deserialize(Of Dictionary(Of String, Object))(System.IO.File.ReadAllText(library, Encoding.UTF8)))
-        ElseIf config.Count = 0 Then
-            Throw New Exception("Не найден файл настроек: " & library)
-        End If
-        nameMap = New Dictionary(Of String, String)
-        If config.ContainsKey("linked_parameters") Then
-            For Each item As Object In DirectCast(config("linked_parameters"), System.Collections.IEnumerable)
-                Dim row As Dictionary(Of String, Object) = DirectCast(item, Dictionary(Of String, Object))
-                Dim key As String = Text(row, "name", "")
-                If key <> "" Then nameMap(key) = Text(row, "source_name", key)
-            Next
-        End If
-        st = Block(config, "stiajka")
-        WriteLog("Настройки: " & If(System.IO.File.Exists(library), library, local))
+        ' Настройки iLogic автономны. Имена ниже — параметры открытой детали.
+        ' Диаметры и глубины вычисляет Inventor; числовые значения здесь не дублируются.
+        st = New Dictionary(Of String, Object) From {
+            {"parameters", New Dictionary(Of String, Object) From {
+                {"diameter", "Стяжка_D"}, {"depth", "Стяжкаh_резьбаШтока_Петля"}, {"offset", "Стяжка_отступ"}}},
+            {"Otv_stijki_v_torec", HoleSettings("Стяжка_D_телаШтока", "Стяжка_отступ", "positive", "Stiajka outer 8x34")},
+            {"Otv_stijki_v_bokoviny", HoleSettings("Стяжка_D_резьбыШтока", "Стяжкаh_резьбаШтока_Петля", "negative", "Stiajka outer 5x13")},
+            {"shkant_v_plast", HoleSettings("Шкант_D", "Шкант_глубина_в_пласть", "negative", "Shkant 8x10")},
+            {"shkant_v_torets", HoleSettings("Шкант_D", "Шкант_глубина_в_торец", "positive", "Shkant 8x20")},
+            {"Chashka stiajki", New Dictionary(Of String, Object) From {
+                {"diameter_parameter", "Стяжка_D"}, {"depth_parameter", "Стяжка_отступ"},
+                {"direction", "positive"}, {"feature_name", "Stiajka cup"}}}}
+        WriteLog("Настройки: встроенные в правило iLogic; размеры из параметров детали.")
     End Sub
 
-    Private Sub Merge(target As Dictionary(Of String, Object), source As Dictionary(Of String, Object))
-        For Each entry As KeyValuePair(Of String, Object) In source
-            If target.ContainsKey(entry.Key) AndAlso TypeOf target(entry.Key) Is Dictionary(Of String, Object) AndAlso TypeOf entry.Value Is Dictionary(Of String, Object) Then
-                Merge(DirectCast(target(entry.Key), Dictionary(Of String, Object)), DirectCast(entry.Value, Dictionary(Of String, Object)))
-            Else
-                target(entry.Key) = entry.Value
-            End If
-        Next
-    End Sub
+    Private Function HoleSettings(diameter As String, depth As String, direction As String, featureName As String) As Dictionary(Of String, Object)
+        Return New Dictionary(Of String, Object) From {
+            {"diameter", diameter}, {"depth", depth}, {"direction", direction}, {"feature_name", featureName}}
+    End Function
 
     Private Function ResolveName(name As String) As String
-        Dim aliases As Dictionary(Of String, Object) = Block(config, "parameter_aliases")
-        Dim resolved As String = Text(aliases, name, name)
-        If nameMap.ContainsKey(resolved) Then Return nameMap(resolved)
-        Return resolved
+        Return name
     End Function
 
     Private Function ResolveExpression(expression As String) As String

@@ -7,7 +7,6 @@ Imports System.Globalization
 Imports System.IO
 Imports System.Text
 Imports System.Text.RegularExpressions
-Imports System.Web.Script.Serialization
 Imports System.Windows.Forms
 
 Partial Public Class ThisRule
@@ -20,9 +19,7 @@ Partial Public Class ThisRule
     Private tg As TransientGeometry
     Private factory As TransientObjects
     Private log As StreamWriter
-    Private config As Dictionary(Of String, Object)
     Private st As Dictionary(Of String, Object)
-    Private nameMap As Dictionary(Of String, String)
     Private bodies As New Dictionary(Of String, SurfaceBody)
     Private reserved As New Dictionary(Of String, HashSet(Of String))
 

@@ -25,7 +25,7 @@
 | Файл | Назначение |
 | --- | --- |
 | `Modules/StiajkaContext.vb` | Общие поля, PairJob, Projection, ошибки, имена и журнал |
-| `Modules/StiajkaConfig.vb` | JSON, сопоставление имён параметров, выражения Keep |
+| `Modules/StiajkaConfig.vb` | Встроенные настройки, имена параметров, выражения Keep |
 | `Modules/StiajkaSelection.vb` | Выбор пар граней, общее ребро, поиск соседнего тела |
 | `Modules/StiajkaSketches.vb` | Общие операции с эскизами и геометрией |
 | `Modules/StiajkaHoles.vb` | Пакеты отверстий, чашки и затрагиваемые тела |
@@ -43,10 +43,9 @@
 Константы `Prefix`, `TieCount` и подписи окна находятся в соответствующих
 главных правилах. Константа `ProjectRoot` — в `Modules/StiajkaContext.vb`.
 
-Настройки читаются из прежнего JSON библиотеки
-`../01_inventor_service/service/excel_parameters/drilling_config.json`
-относительно корня Python-проекта. Необязательный `settings.json` из корня
-проекта читается первым; библиотечный JSON имеет приоритет. Python не запускается.
+Правила работают без JSON и Python. Имена параметров и направления операций
+заданы в `Modules/StiajkaConfig.vb`; значения размеров берутся из открытой детали.
+Изменения внешнего JSON на правила не влияют. `ProjectRoot` используется для журнала.
 
 ## Проверка
 

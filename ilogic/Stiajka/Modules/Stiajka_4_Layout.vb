@@ -7,7 +7,6 @@ Imports System.Globalization
 Imports System.IO
 Imports System.Text
 Imports System.Text.RegularExpressions
-Imports System.Web.Script.Serialization
 Imports System.Windows.Forms
 
 Partial Public Class ThisRule

@@ -45,7 +45,7 @@ SMOKE_METHOD = '''
                     rejected = True
                 End Try
                 result("shortRejected") = rejected
-                Return New JavaScriptSerializer().Serialize(result)
+                Return New System.Web.Script.Serialization.JavaScriptSerializer().Serialize(result)
             End Using
         End Using
     End Function
@@ -165,7 +165,7 @@ CONFIRMAT_SMOKE_METHOD = '''
                     Throw New System.Runtime.InteropServices.COMException("E_FAIL test", -2147467259)
                 End Sub)
                 result("displayErrorIgnored") = True
-                Return New JavaScriptSerializer().Serialize(result)
+                Return New System.Web.Script.Serialization.JavaScriptSerializer().Serialize(result)
             End Using
         End Using
     End Function
@@ -194,12 +194,11 @@ def smoke_check(output, interop, four=False, one=False, confirmat=False, petli=F
     if petli:
         check_petli_snapshot(snapshot)
         return
-    from common.settings import load_settings
     if confirmat:
-        settings = load_settings()["confirmat"]
         for key in ("outer_2pcs", "inner_2pcs", "outer_3pcs", "inner_3pcs"):
-            for field in ("diameter", "depth"):
-                assert snapshot[key + "." + field] == settings[key][field], (key, field)
+            expected = ("M_Конфирмат_D_вПласть", "M_Конфирмат_сквозное_отв") if key.startswith("outer") else ("M_Конфирмат_D_вТорец", "M_Конфирмат_длина")
+            for field, value in zip(("diameter", "depth"), expected):
+                assert snapshot[key + "." + field] == value, (key, field)
         assert abs(snapshot["span64"] - 6.4) < 1e-9
         assert abs(snapshot["spanLong"] - 28.8) < 1e-9
         assert snapshot["count2"] == 2 and snapshot["count3"] == 3
@@ -207,18 +206,22 @@ def smoke_check(output, interop, four=False, one=False, confirmat=False, petli=F
         assert snapshot["unitlessKeep"] == "count * 0"
         assert snapshot["lengthKeep"] == "(count / (1 mm)) * 0"
         assert snapshot["displayErrorIgnored"]
-        print("Confirmat settings match Python; spacing, count and Keep expressions OK. No Inventor model was run.")
+        print("Confirmat built-in settings, spacing, count and Keep expressions OK; no configuration files read. No Inventor model was run.")
         return
-    settings = load_settings()["stiajka"]
-    expected = dict(settings["parameters"])
-    for key in ("Otv_stijki_v_torec", "Otv_stijki_v_bokoviny", "shkant_v_plast", "shkant_v_torets"):
-        expected[key + ".diameter"] = settings[key]["diameter"]
-        expected[key + ".depth"] = settings[key]["depth"]
-        expected[key + ".direction"] = 20994 if settings[key]["direction"] == "negative" else 20993
-    expected["cup.direction"] = 20994 if settings["Chashka stiajki"]["direction"] == "negative" else 20993
+    expected = {"diameter": "Стяжка_D", "depth": "Стяжкаh_резьбаШтока_Петля", "offset": "Стяжка_отступ"}
+    for key, diameter, depth, direction in (
+        ("Otv_stijki_v_torec", "Стяжка_D_телаШтока", "Стяжка_отступ", 20993),
+        ("Otv_stijki_v_bokoviny", "Стяжка_D_резьбыШтока", "Стяжкаh_резьбаШтока_Петля", 20994),
+        ("shkant_v_plast", "Шкант_D", "Шкант_глубина_в_пласть", 20994),
+        ("shkant_v_torets", "Шкант_D", "Шкант_глубина_в_торец", 20993),
+    ):
+        expected[key + ".diameter"] = diameter
+        expected[key + ".depth"] = depth
+        expected[key + ".direction"] = direction
+    expected["cup.direction"] = 20993
     for name, value in expected.items():
         if snapshot.get(name) != value:
-            raise AssertionError(f"Native/Python settings mismatch: {name}: {snapshot.get(name)!r} != {value!r}")
+            raise AssertionError(f"Built-in settings mismatch: {name}: {snapshot.get(name)!r} != {value!r}")
     if one:
         assert snapshot["centers"] == [-1.6, 1.6]
         assert snapshot["edgeRejected"] is True
@@ -243,7 +246,7 @@ def smoke_check(output, interop, four=False, one=False, confirmat=False, petli=F
     assert snapshot["normalParallel"] == 0.0
     assert snapshot["normalOpposite"] == 0.0
     assert snapshot["displayErrorIgnored"] is True
-    print("Native JSON/settings match Python; spacing and short-face validation OK. No Inventor model was run.")
+    print("Built-in settings, spacing and short-face validation OK; no configuration files read. No Inventor model was run.")
 
 
 def read_rule_sources(rule):
@@ -327,6 +330,8 @@ def main():
     sources = read_rule_sources(args.rule)
     source = sources[0]
     combined = "\n".join(sources)
+    if re.search(r'(?i)\.json|Deserialize|ReadAllText|ReadAllBytes', combined):
+        parser.error("Правила iLogic должны работать без чтения файлов конфигурации.")
     four = "Private Const TieCount As Integer = 4" in combined
     one = "Private Const TieCount As Integer = 1" in combined
     confirmat = 'Private Const Workflow As String = "confirmat"' in combined

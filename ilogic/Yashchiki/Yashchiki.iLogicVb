@@ -1,0 +1,238 @@
+' Присадка ящиков. Выберите три плоские грани с Ctrl, затем запустите правило.
+AddReference "System.Windows.Forms.dll"
+Imports Inventor
+Imports System.Collections.Generic
+Imports System.Windows.Forms
+
+Public Class ThisRule
+    Private Const Tol As Double = 0.00001 ' Внутренние единицы Inventor — см.
+    Private Const PilotD As String = "Наколка_D"
+    Private Const NeighborGap As Double = 0.5 ' 5 мм от плоскости эскиза до соседнего тела.
+    Private app As Inventor.Application
+    Private comp As PartComponentDefinition
+    Private tg As TransientGeometry
+
+    Public Sub Main()
+        app = ThisApplication
+        Dim transaction As Inventor.Transaction = Nothing
+        Dim previousScreen As Boolean = app.ScreenUpdating
+        Try
+            If app.ActiveDocument Is Nothing OrElse app.ActiveDocument.DocumentType <> DocumentTypeEnum.kPartDocumentObject Then
+                Throw New Exception("Откройте многотельную .ipt-деталь.")
+            End If
+            Dim part As PartDocument = DirectCast(app.ActiveDocument, PartDocument)
+            comp = part.ComponentDefinition : tg = app.TransientGeometry
+            If part.SelectSet.Count <> 3 Then Throw New Exception("Выберите с Ctrl ровно три грани: пласть для эскиза, боковую и нижнюю базы.")
+            Dim faces As New List(Of Face)
+            For Each entity As Object In part.SelectSet
+                Dim f As Face = TryCast(entity, Face)
+                If f Is Nothing OrElse Not TypeOf f.Geometry Is Plane Then Throw New Exception("Все три выбранные грани должны быть плоскими.")
+                If Not f.SurfaceBody.IsSolid Then Throw New Exception("Выбирайте грани твёрдых тел.")
+                faces.Add(f)
+            Next
+            faces.Sort(Function(a As Face, b As Face) b.Evaluator.Area.CompareTo(a.Evaluator.Area))
+            If Math.Abs(faces(0).Evaluator.Area - faces(1).Evaluator.Area) < Tol * Tol Then
+                Throw New Exception("Не удалось однозначно определить большую грань для эскиза.")
+            End If
+            Dim main As Face = faces(0)
+            Dim normal As UnitVector = DirectCast(main.Geometry, Plane).Normal
+            For i As Integer = 1 To 2
+                If Math.Abs(normal.DotProduct(DirectCast(faces(i).Geometry, Plane).Normal)) > Tol Then
+                    Throw New Exception("Обе базовые грани должны быть перпендикулярны большой грани.")
+                End If
+            Next
+            If Math.Abs(DirectCast(faces(1).Geometry, Plane).Normal.DotProduct(DirectCast(faces(2).Geometry, Plane).Normal)) > Tol Then
+                Throw New Exception("Боковая и нижняя базы должны быть взаимно перпендикулярны.")
+            End If
+            Dim diameter As Inventor.Parameter = Nothing
+            Try
+                diameter = comp.Parameters.Item(PilotD)
+            Catch
+                Throw New Exception("В детали отсутствует параметр " & PilotD & ".")
+            End Try
+            part.UnitsOfMeasure.ConvertUnits(1, diameter.Units, "cm")
+            Dim radius As Double = CDbl(diameter.Value) / 2
+            If Double.IsNaN(radius) OrElse Double.IsInfinity(radius) OrElse radius <= 0 Then
+                Throw New Exception("Параметр " & PilotD & " должен быть положительной длиной.")
+            End If
+            If radius * 2 >= 9.6 Then Throw New Exception("Диаметр превышает расстояние между центрами.")
+
+            ' Базы задают два смежных прямых ребра большой прямоугольной грани.
+            Dim edge1 As Edge = BaseEdge(main, DirectCast(faces(1).Geometry, Plane))
+            Dim edge2 As Edge = BaseEdge(main, DirectCast(faces(2).Geometry, Plane))
+            Dim length1 As Double = edge1.StartVertex.Point.DistanceTo(edge1.StopVertex.Point)
+            Dim length2 As Double = edge2.StartVertex.Point.DistanceTo(edge2.StopVertex.Point)
+            If Math.Abs(length1 - length2) < Tol Then Throw New Exception("Для квадратной грани нижняя база неоднозначна.")
+            ' Длинное базовое ребро — нижняя база; короткое — боковая.
+            Dim bottom As Edge = If(length1 > length2, edge1, edge2)
+            Dim side As Edge = If(length1 > length2, edge2, edge1)
+
+            transaction = app.TransactionManager.StartTransaction(part, "Присадка ящиков — 3 наколки")
+            app.ScreenUpdating = False
+            Dim sketch As PlanarSketch = comp.Sketches.Add(main)
+            sketch.Name = UniqueName(comp.Sketches, "Yashchiki")
+            Dim contour As New List(Of SketchLine)
+            Dim bottomLine As SketchLine = Nothing, sideLine As SketchLine = Nothing
+            Dim sumX As Double = 0, sumY As Double = 0
+            For Each edge As Edge In main.Edges
+                If edge.GeometryType <> CurveTypeEnum.kLineSegmentCurve AndAlso edge.GeometryType <> CurveTypeEnum.kLineCurve Then
+                    Throw New Exception("Большая грань должна быть прямоугольной, без вырезов и скруглений.")
+                End If
+                Dim line As SketchLine = DirectCast(sketch.AddByProjectingEntity(edge), SketchLine)
+                line.Construction = True : contour.Add(line)
+                sumX += line.StartSketchPoint.Geometry.X : sumY += line.StartSketchPoint.Geometry.Y
+                If edge.TransientKey = bottom.TransientKey Then bottomLine = line
+                If edge.TransientKey = side.TransientKey Then sideLine = line
+            Next
+            If contour.Count <> 4 OrElse bottomLine Is Nothing OrElse sideLine Is Nothing Then
+                Throw New Exception("Для эскиза нужна прямоугольная грань с четырьмя рёбрами.")
+            End If
+            Dim inside As Point2d = tg.CreatePoint2d(sumX / 4, sumY / 4)
+            Dim u As Vector2d = Inward(sideLine, inside), v As Vector2d = Inward(bottomLine, inside)
+            For Each line As SketchLine In contour
+                Dim direction2d As Vector2d = line.StartSketchPoint.Geometry.VectorTo(line.EndSketchPoint.Geometry)
+                direction2d.Normalize()
+                If Math.Abs(direction2d.DotProduct(u)) < 1 - Tol AndAlso Math.Abs(direction2d.DotProduct(v)) < 1 - Tol Then
+                    Throw New Exception("Большая грань должна быть прямоугольной.")
+                End If
+            Next
+            Dim origin As Point2d = Corner(bottomLine, sideLine)
+            Dim width As Double = Math.Max(length1, length2), height As Double = Math.Min(length1, length2)
+            Dim centers As New List(Of Inventor.Point)
+            Dim offsets As Double() = {3.7, 16.5, 26.1}
+            For i As Integer = 0 To offsets.Length - 1
+                Dim x As Double = offsets(i), y As Double = 2.3
+                If x - radius <= Tol OrElse x + radius >= width - Tol OrElse y - radius <= Tol OrElse y + radius >= height - Tol Then
+                    Throw New Exception("Круг выходит за границы большой грани. Проверьте базы и размеры детали.")
+                End If
+                Dim p As Point2d = tg.CreatePoint2d(origin.X + u.X * x + v.X * y, origin.Y + u.Y * x + v.Y * y)
+                Dim circle As SketchCircle = sketch.SketchCircles.AddByCenterRadius(p, radius)
+                sketch.DimensionConstraints.AddDiameter(circle, tg.CreatePoint2d(p.X + radius + 1, p.Y + 1)).Parameter.Expression = PilotD
+                sketch.DimensionConstraints.AddOffset(sideLine, circle.CenterSketchPoint, tg.CreatePoint2d(p.X, p.Y - 3 - i), False).Parameter.Expression =
+                    (offsets(i) * 10).ToString(System.Globalization.CultureInfo.InvariantCulture) & " mm"
+                sketch.DimensionConstraints.AddOffset(bottomLine, circle.CenterSketchPoint, tg.CreatePoint2d(p.X - 1, p.Y), False).Parameter.Expression = "23 mm"
+                centers.Add(sketch.SketchToModelSpace(circle.CenterSketchPoint.Geometry))
+            Next
+            sketch.Solve()
+
+            ' Найти входную грань соседа на расстоянии 5 мм под всеми тремя кругами.
+            Dim target As Face = Neighbor(main, centers, u, v, sketch, radius)
+            Dim targetBody As SurfaceBody = target.SurfaceBody
+            Dim outward As UnitVector = DirectCast(target.Geometry, Plane).Normal
+            Dim sign As Double = If(target.IsParamReversed, -1.0, 1.0)
+            Dim o As Inventor.Point = sketch.SketchToModelSpace(tg.CreatePoint2d(0, 0))
+            Dim sx As Vector = o.VectorTo(sketch.SketchToModelSpace(tg.CreatePoint2d(1, 0)))
+            Dim sy As Vector = o.VectorTo(sketch.SketchToModelSpace(tg.CreatePoint2d(0, 1)))
+            Dim dot As Double = sx.CrossProduct(sy).DotProduct(outward.AsVector()) * sign
+            Dim direction As PartFeatureExtentDirectionEnum = If(dot > 0, PartFeatureExtentDirectionEnum.kNegativeExtentDirection, PartFeatureExtentDirectionEnum.kPositiveExtentDirection)
+            Dim profile As Profile = sketch.Profiles.AddForSolid()
+            Dim definition As ExtrudeDefinition = comp.Features.ExtrudeFeatures.CreateExtrudeDefinition(profile, PartFeatureOperationEnum.kCutOperation)
+            Dim affected As ObjectCollection = app.TransientObjects.CreateObjectCollection()
+            affected.Add(targetBody)
+            definition.AffectedBodies = affected
+            definition.SetDistanceExtent("7 mm", direction)
+            Dim feature As ExtrudeFeature = comp.Features.ExtrudeFeatures.Add(definition)
+            feature.Name = UniqueName(comp.Features.ExtrudeFeatures, "Yashchiki_Cut_7mm")
+            sketch.Visible = False
+            If Not part.Update2(False) OrElse feature.HealthStatus <> HealthStatusEnum.kUpToDateHealth Then
+                Throw New Exception("Inventor не смог построить вырез. Проверьте зазор 5 мм и толщину соседнего тела.")
+            End If
+            transaction.End() : transaction = Nothing
+        Catch ex As Exception
+            If transaction IsNot Nothing Then transaction.Abort()
+            MessageBox.Show(ex.Message, "Присадка ящиков", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        Finally
+            app.ScreenUpdating = previousScreen
+        End Try
+    End Sub
+
+    Private Function BaseEdge(main As Face, plane As Plane) As Edge
+        Dim found As Edge = Nothing
+        For Each edge As Edge In main.Edges
+            If edge.GeometryType <> CurveTypeEnum.kLineSegmentCurve AndAlso edge.GeometryType <> CurveTypeEnum.kLineCurve Then Continue For
+            If PlaneDistance(edge.StartVertex.Point, plane) > Tol OrElse PlaneDistance(edge.StopVertex.Point, plane) > Tol Then Continue For
+            If found IsNot Nothing Then Throw New Exception("Базовая плоскость совпадает с несколькими рёбрами. Нужна прямоугольная грань.")
+            found = edge
+        Next
+        If found Is Nothing Then Throw New Exception("Плоскость каждой базовой грани должна проходить через ребро большой грани.")
+        Return found
+    End Function
+
+    Private Function PlaneDistance(p As Inventor.Point, plane As Plane) As Double
+        Return Math.Abs(plane.RootPoint.VectorTo(p).DotProduct(plane.Normal.AsVector()))
+    End Function
+
+    Private Function Inward(line As SketchLine, inside As Point2d) As Vector2d
+        Dim a As Point2d = line.StartSketchPoint.Geometry, b As Point2d = line.EndSketchPoint.Geometry
+        Dim n As Vector2d = tg.CreateVector2d(-(b.Y - a.Y), b.X - a.X)
+        n.Normalize()
+        If n.X * (inside.X - a.X) + n.Y * (inside.Y - a.Y) < 0 Then n.ScaleBy(-1)
+        Return n
+    End Function
+
+    Private Function Corner(a As SketchLine, b As SketchLine) As Point2d
+        For Each p As SketchPoint In New SketchPoint() {a.StartSketchPoint, a.EndSketchPoint}
+            For Each q As SketchPoint In New SketchPoint() {b.StartSketchPoint, b.EndSketchPoint}
+                If p.Geometry.DistanceTo(q.Geometry) < Tol Then Return p.Geometry
+            Next
+        Next
+        Throw New Exception("Базовые рёбра должны иметь общий угол.")
+    End Function
+
+    Private Function Neighbor(source As Face, centers As List(Of Inventor.Point), u As Vector2d, v As Vector2d,
+                              sketch As PlanarSketch, radius As Double) As Face
+        Dim found As New Dictionary(Of String, Face)
+        Dim plane As Plane = DirectCast(source.Geometry, Plane)
+        For Each body As SurfaceBody In comp.SurfaceBodies
+            If Not body.IsSolid OrElse body.Name = source.SurfaceBody.Name Then Continue For
+            For Each face As Face In body.Faces
+                If Not TypeOf face.Geometry Is Plane Then Continue For
+                Dim candidate As Plane = DirectCast(face.Geometry, Plane)
+                If Math.Abs(candidate.Normal.DotProduct(plane.Normal)) < 1 - Tol Then Continue For
+                Dim gap As Double = plane.RootPoint.VectorTo(candidate.RootPoint).DotProduct(plane.Normal.AsVector())
+                If Math.Abs(Math.Abs(gap) - NeighborGap) > Tol Then Continue For
+                ' Входная грань обращена к эскизу: исключить обратную поверхность тела.
+                Dim outwardSign As Double = If(face.IsParamReversed, -1.0, 1.0)
+                If gap * candidate.Normal.DotProduct(plane.Normal) * outwardSign >= 0 Then Continue For
+                Dim fits As Boolean = True
+                For Each center As Inventor.Point In centers
+                    Dim shifted As Inventor.Point = ShiftToNeighbor(center, plane.Normal, gap)
+                    If face.GetClosestPointTo(shifted).DistanceTo(shifted) > Tol Then fits = False : Exit For
+                    Dim p As Point2d = sketch.ModelToSketchSpace(center)
+                    For j As Integer = 0 To 31
+                        Dim angle As Double = 2 * Math.PI * j / 32
+                        Dim sample As Inventor.Point = sketch.SketchToModelSpace(tg.CreatePoint2d(
+                            p.X + radius * (u.X * Math.Cos(angle) + v.X * Math.Sin(angle)),
+                            p.Y + radius * (u.Y * Math.Cos(angle) + v.Y * Math.Sin(angle))))
+                        sample = ShiftToNeighbor(sample, plane.Normal, gap)
+                        If face.GetClosestPointTo(sample).DistanceTo(sample) > Tol Then fits = False : Exit For
+                    Next
+                    If Not fits Then Exit For
+                Next
+                If fits Then found(body.Name) = face
+            Next
+        Next
+        If found.Count <> 1 Then Throw New Exception("Нужно одно соседнее тело на расстоянии 5 мм от плоскости эскиза под всеми тремя кругами. Найдено: " & found.Count.ToString())
+        For Each face As Face In found.Values
+            Return face
+        Next
+        Throw New Exception("Соседнее тело не найдено.")
+    End Function
+
+    Private Function ShiftToNeighbor(p As Inventor.Point, normal As UnitVector, gap As Double) As Inventor.Point
+        Return tg.CreatePoint(p.X + normal.X * gap, p.Y + normal.Y * gap, p.Z + normal.Z * gap)
+    End Function
+
+    Private Function UniqueName(collection As Object, basis As String) As String
+        Dim index As Integer = 0
+        Do
+            Dim candidate As String = basis & If(index = 0, "", "_" & index.ToString())
+            Try
+                Dim existing As Object = collection.Item(candidate)
+            Catch
+                Return candidate
+            End Try
+            index += 1
+        Loop
+    End Function
+End Class

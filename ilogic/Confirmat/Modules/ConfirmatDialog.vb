@@ -7,7 +7,6 @@ Imports System.Globalization
 Imports System.IO
 Imports System.Text
 Imports System.Text.RegularExpressions
-Imports System.Web.Script.Serialization
 Imports System.Windows.Forms
 
 Partial Public Class ThisRule
@@ -22,7 +21,8 @@ Partial Public Class ThisRule
         loadNames(comp.Parameters.UserParameters)
         Using dialog As New Form()
             dialog.Text = "02 Конфирмат — параметры присадки"
-            dialog.Width = 900 : dialog.Height = 460
+            dialog.AutoScaleMode = AutoScaleMode.None
+            dialog.Width = 900 : dialog.Height = Math.Min(613, Screen.FromPoint(Cursor.Position).WorkingArea.Height)
             dialog.Font = New System.Drawing.Font("Segoe UI", 10.0F)
             dialog.FormBorderStyle = FormBorderStyle.FixedDialog
             dialog.StartPosition = FormStartPosition.CenterScreen
@@ -31,11 +31,21 @@ Partial Public Class ThisRule
             Dim filters() As String = {"толщина", "отступ", "конфирмат"}
             Dim defaults() As String = {"Толщина_каркаса_МДФ", "Минимальный_отступ_присадки_от_кромки_Каркас", "Количество_конфирматов"}
             Dim combos As New List(Of ComboBox)
+            Dim fields As New TableLayoutPanel With {.Dock = DockStyle.Top, .AutoSize = True,
+                .AutoSizeMode = AutoSizeMode.GrowAndShrink, .ColumnCount = 1, .RowCount = 6,
+                .Padding = New Padding(16), .Margin = New Padding(0)}
+            fields.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100.0F))
+            dialog.Controls.Add(fields)
             For i As Integer = 0 To 2
-                Dim label As New Label With {.Left = 16, .Top = 16 + i * 86, .Width = 852, .Height = 26, .Text = labels(i)}
-                Dim combo As New ComboBox With {.Left = 16, .Top = 46 + i * 86, .Width = 852, .DropDownWidth = 1000, .DropDownHeight = 280, .IntegralHeight = False, .DropDownStyle = ComboBoxStyle.DropDown}
+                fields.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+                fields.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+                Dim label As New Label With {.AutoSize = True, .Text = labels(i),
+                    .Margin = New Padding(0, 0, 0, 8)}
+                Dim combo As New ComboBox With {.Dock = DockStyle.Top, .Margin = New Padding(0, 0, 0, 24),
+                    .DropDownWidth = 1000, .DropDownHeight = 1120, .IntegralHeight = False, .DropDownStyle = ComboBoxStyle.DropDown}
                 combos.Add(combo)
-                dialog.Controls.Add(label) : dialog.Controls.Add(combo)
+                fields.Controls.Add(label, 0, i * 2)
+                fields.Controls.Add(combo, 0, i * 2 + 1)
             Next
             Dim populate As Action = Sub()
                 For i As Integer = 0 To 2
@@ -57,15 +67,45 @@ Partial Public Class ThisRule
                 Next
             End Sub
             populate()
-            Dim load As New Button With {.Left = 16, .Top = 320, .Width = 310, .Height = 36, .Text = "Загрузить параметры модели"}
+            Dim load As New Button With {.AutoSize = True, .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                .MinimumSize = New System.Drawing.Size(280, 40),
+                .Padding = New Padding(12, 6, 12, 6), .Margin = New Padding(0, 0, 0, 12),
+                .Anchor = AnchorStyles.Left, .Text = "Загрузить параметры модели"}
             AddHandler load.Click, Sub(sender As Object, e As EventArgs)
                 load.Enabled = False
                 loadNames(comp.Parameters.ModelParameters)
                 populate()
             End Sub
-            Dim ok As New Button With {.Left = 640, .Top = 320, .Width = 100, .Height = 36, .Text = "OK", .DialogResult = DialogResult.OK}
-            Dim cancel As New Button With {.Left = 756, .Top = 320, .Width = 112, .Height = 36, .Text = "Отмена", .DialogResult = DialogResult.Cancel}
-            dialog.Controls.AddRange(New Control() {load, ok, cancel})
+            Dim ok As New Button With {.AutoSize = True, .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                .MinimumSize = New System.Drawing.Size(90, 36), .Padding = New Padding(12, 6, 12, 6),
+                .Margin = New Padding(0, 0, 12, 0), .Text = "OK", .DialogResult = DialogResult.OK}
+            Dim cancel As New Button With {.AutoSize = True, .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                .MinimumSize = New System.Drawing.Size(90, 36), .Padding = New Padding(12, 6, 12, 6),
+                .Margin = New Padding(0), .Text = "Отмена", .DialogResult = DialogResult.Cancel}
+            ' Две строки: длинная подпись загрузки не конкурирует с OK и Отмена.
+            Dim actions As New FlowLayoutPanel With {.AutoSize = True,
+                .AutoSizeMode = AutoSizeMode.GrowAndShrink, .Dock = DockStyle.Fill,
+                .FlowDirection = FlowDirection.RightToLeft, .WrapContents = False, .Margin = New Padding(0)}
+            actions.Controls.Add(cancel) : actions.Controls.Add(ok)
+            Dim footer As New TableLayoutPanel With {.Dock = DockStyle.Bottom, .AutoSize = True,
+                .AutoSizeMode = AutoSizeMode.GrowAndShrink, .ColumnCount = 1, .RowCount = 2,
+                .Padding = New Padding(16), .Margin = New Padding(0)}
+            footer.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100.0F))
+            footer.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+            footer.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+            footer.Controls.Add(load, 0, 0) : footer.Controls.Add(actions, 0, 1)
+            Dim layout As New TableLayoutPanel With {.Dock = DockStyle.Fill, .ColumnCount = 1, .RowCount = 3,
+                .Margin = New Padding(0), .Padding = New Padding(0)}
+            layout.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100.0F))
+            layout.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+            layout.RowStyles.Add(New RowStyle(SizeType.Percent, 100.0F))
+            layout.RowStyles.Add(New RowStyle(SizeType.AutoSize))
+            footer.Dock = DockStyle.Fill
+            layout.Controls.Add(fields, 0, 0) : layout.Controls.Add(footer, 0, 2)
+            dialog.Controls.Add(layout)
+            dialog.MinimumSize = New System.Drawing.Size(500,
+                fields.GetPreferredSize(New System.Drawing.Size(500, 0)).Height +
+                footer.GetPreferredSize(New System.Drawing.Size(500, 0)).Height + 60)
             dialog.AcceptButton = ok : dialog.CancelButton = cancel
             If dialog.ShowDialog() <> DialogResult.OK Then Return Nothing
             Dim result As New List(Of String)

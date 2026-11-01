@@ -1,6 +1,5 @@
 ﻿' Внешнее правило iLogic: присадка 05 непосредственно внутри Inventor 2023.
 ' Настройки и логика соответствуют 05_stiajka.py. Python не запускается.
-AddReference "System.Web.Extensions.dll"
 AddReference "System.Drawing.dll"
 AddReference "System.Windows.Forms.dll"
 Imports Inventor
@@ -10,7 +9,6 @@ Imports System.Globalization
 Imports System.IO
 Imports System.Text
 Imports System.Text.RegularExpressions
-Imports System.Web.Script.Serialization
 Imports System.Windows.Forms
 
 AddVbFile "Modules\StiajkaContext.vb"
@@ -91,8 +89,8 @@ Public Class ThisRule
                 WriteLog("05: Общее время построения: " & Seconds(total) & "s")
                 WriteLog("05: Готово. Пар граней: " & jobs.Count.ToString())
                 log.Flush()
-                MessageBox.Show("Присадка создана." & vbCrLf & "Время построения: " & Seconds(total) & " с" &
-                                vbCrLf & "Журнал: " & logPath, "05 — iLogic Native")
+                ' MessageBox.Show("Присадка создана." & vbCrLf & "Время построения: " & Seconds(total) & " с" &
+                                ' vbCrLf & "Журнал: " & logPath, "05 — iLogic Native")
             Catch ex As Exception
                 WriteLog("ОШИБКА: " & ex.ToString())
                 If transaction IsNot Nothing Then

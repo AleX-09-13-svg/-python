@@ -1,5 +1,4 @@
 ﻿' Native iLogic equivalent of 02_confirmat.py.
-AddReference "System.Web.Extensions.dll"
 AddReference "System.Drawing.dll"
 AddReference "System.Windows.Forms.dll"
 Imports Inventor
@@ -9,7 +8,6 @@ Imports System.Globalization
 Imports System.IO
 Imports System.Text
 Imports System.Text.RegularExpressions
-Imports System.Web.Script.Serialization
 Imports System.Windows.Forms
 
 AddVbFile "Modules\ConfirmatContext.vb"
@@ -80,8 +78,8 @@ Public Class ThisRule
                 total.Stop()
                 WriteLog("Общее время построения: " & Seconds(total) & "s")
                 log.Flush()
-                MessageBox.Show("Присадка конфирматов создана. Количество: " & count.ToString() & vbCrLf &
-                                "Время построения: " & Seconds(total) & " с" & vbCrLf & "Журнал: " & logPath, "02 — iLogic Native")
+                ' MessageBox.Show("Присадка конфирматов создана. Количество: " & count.ToString() & vbCrLf &
+                                ' "Время построения: " & Seconds(total) & " с" & vbCrLf & "Журнал: " & logPath, "02 — iLogic Native")
             Catch ex As Exception
                 WriteLog("ОШИБКА: " & ex.ToString())
                 If transaction IsNot Nothing Then
