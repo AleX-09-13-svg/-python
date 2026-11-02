@@ -14,10 +14,10 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 COMMANDS = {
     "petli": ("Петли 07", "07_Petli.py"),
     "line_parameter": ("Размер выбранных отрезков", "06_line_parameter.py"),
-    "stiajka5": ("Stiajka 05", "05_stiajka.py"),
-    "stiajka": ("Stiajka 2pcs", "05_stiajka.py"),
-    "confirmat2": ("Confirmat", "02_confirmat.py"),
-    "confirmat2_bok16": ("Confirmat", "02_confirmat.py"),
+    "stiajka5": ("Stiajka 05", "05_stiajka_2inch.py"),
+    "stiajka": ("Stiajka 2pcs", "05_stiajka_2inch.py"),
+    "confirmat2": ("Confirmat", "02_confirmat_5inch.py"),
+    "confirmat2_bok16": ("Confirmat", "02_confirmat_5inch.py"),
 }
 
 

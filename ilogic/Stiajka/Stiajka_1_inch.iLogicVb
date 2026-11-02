@@ -1,4 +1,10 @@
-﻿' One centered tie and one dowel, 32 mm apart. Based on Stiajka_4_inch.
+﻿' ОДНА СТЯЖКА И ОДИН ШКАНТ. Обычное внешнее правило для .ipt.
+' Выберите узкую грань и смежную пласть одного тела; порядок внутри пары не важен.
+' Для нескольких тел выберите по две грани каждого тела. Требуется одно общее прямое ребро.
+' Окна отступа нет. По центру ребра находится ПАРА стяжка + шкант, а не сама стяжка.
+' Между центрами 32 мм: стяжка на 16 мм от середины, шкант — на 16 мм в другую сторону.
+' На пласти — одна соответствующая чашка. Диаметры, глубины и отступ чашки — из параметров детали.
+' Журнал: stiajka_1_ilogic.log в ProjectRoot. Modules отдельно не запускать.
 AddReference "System.Drawing.dll"
 AddReference "System.Windows.Forms.dll"
 Imports Inventor
@@ -59,7 +65,7 @@ Public Class ThisRule
                 For Each job As PairJob In jobs
                     Dim length As Double = job.Common.StartVertex.Point.DistanceTo(job.Common.StopVertex.Point)
                     ValidateLayout(length)
-                    WriteLog("Centered tie; edge length: " & Rounded(length * 10) & " mm")
+                    WriteLog("Пара стяжка + шкант вокруг середины; длина ребра: " & Rounded(length * 10) & " мм")
                 Next
                 LogStage("Проверка параметров и чтение значений", phase)
                 transaction = app.TransactionManager.StartTransaction(part, "Одна стяжка — iLogic Native")

@@ -7,23 +7,29 @@ from common.constants import PARAMETERS
 DEFAULT_FRAME_EDGE_OFFSET_PARAMS = (PARAMETERS.edge_offset,)
 
 
-def choose_frame_edge_offset_parameter(inventor, parameter_cache=None):
-    options = frame_edge_offset_parameter_options(inventor, parameter_cache=parameter_cache)
+def choose_frame_edge_offset_parameter(inventor, parameter_cache=None, *, fixed_offset=False):
+    if fixed_offset:
+        names = all_parameter_names(inventor, include_model=False, parameter_cache=parameter_cache)
+        options = unique_names((*sorted(name for name in names if "отступ" in name.lower()), *sorted(names)))
+    else:
+        options = frame_edge_offset_parameter_options(inventor, parameter_cache=parameter_cache)
     selected = {"frame_edge_offset": None}
     root = tk.Tk()
-    root.title("Выберите параметр отступа каркаса")
+    root.title("Три стяжки — фиксированный отступ" if fixed_offset else "Выберите параметр отступа каркаса")
     root.geometry("620x180+80+80")
     root.resizable(False, False)
     frame = ttk.Frame(root, padding=12)
     frame.pack(fill=tk.BOTH, expand=True)
-    label = ttk.Label(frame, text="Параметр Минимальный_отступ_присадки_от_кромки_Каркас:")
+    label = ttk.Label(frame, text="Пользовательский параметр точного отступа от края до центра:" if fixed_offset
+                      else "Параметр Минимальный_отступ_присадки_от_кромки_Каркас:")
     label.pack(anchor=tk.W)
     value = tk.StringVar(value=options[0] if options else "")
     combo = ttk.Combobox(frame, textvariable=value, values=options, state="readonly")
     combo.pack(fill=tk.X, pady=(6, 12))
     combo.focus_set()
     combo.selection_range(0, tk.END)
-    status = ttk.Label(frame, text="Показаны пользовательские параметры отступа.")
+    status = ttk.Label(frame, text="Три стяжки: крайние с точным отступом, третья по центру." if fixed_offset
+                       else "Показаны пользовательские параметры отступа.")
     status.pack(anchor=tk.W, pady=(0, 8))
     buttons = ttk.Frame(frame)
     buttons.pack(fill=tk.X)
@@ -50,7 +56,8 @@ def choose_frame_edge_offset_parameter(inventor, parameter_cache=None):
               f"имён: {len(model_names)}", flush=True)
 
     model_button = ttk.Button(buttons, text="Загрузить параметры модели", command=load_model_parameters)
-    model_button.pack(side=tk.LEFT)
+    if not fixed_offset:
+        model_button.pack(side=tk.LEFT)
     ttk.Button(buttons, text="OK", command=accept).pack(side=tk.RIGHT)
     ttk.Button(buttons, text="Отмена", command=cancel).pack(side=tk.RIGHT, padx=(0, 8))
     root.bind("<Return>", lambda event: accept())

@@ -1,0 +1,34 @@
+' ДВА КОНФИРМАТА, СИММЕТРИЯ ОТНОСИТЕЛЬНО СЕРЕДИНЫ. Обычное внешнее правило для .ipt.
+' Выберите одну или несколько плоских граней присадки. Дополнительный ориентир не нужен.
+' В окне: пользовательские параметры толщины и МИНИМАЛЬНОГО отступа от края до центра.
+' Между центрами: floor((длина оси − 2 × отступ) / 32 мм) × 32 мм.
+' Фактические отступы с обоих краёв равны и не меньше выбранного минимума.
+' Ось — между серединами двух самых коротких прямых проекций рёбер грани.
+' Журнал: 02_confirmat_2inch_ilogic.log в ProjectRoot. Modules отдельно не запускать.
+AddReference "System.Drawing.dll"
+AddReference "System.Windows.Forms.dll"
+AddReference "Autodesk.Inventor.Interop.dll"
+Imports Inventor
+Imports System.Collections.Generic
+Imports System.Diagnostics
+Imports System.Globalization
+Imports System.IO
+Imports System.Text
+Imports System.Text.RegularExpressions
+Imports System.Windows.Forms
+
+AddVbFile "Modules\ConfirmatContext.vb"
+AddVbFile "Modules\ConfirmatConfig.vb"
+AddVbFile "Modules\ConfirmatDialog.vb"
+AddVbFile "Modules\ConfirmatSketches.vb"
+AddVbFile "Modules\ConfirmatReference.vb"
+AddVbFile "Modules\ConfirmatHoles.vb"
+
+AddVbFile "Modules\ConfirmatWorkflow.vb"
+
+Public Class ThisRule
+    Public Sub Main()
+        app = ThisApplication
+        RunConfirmat(2)
+    End Sub
+End Class

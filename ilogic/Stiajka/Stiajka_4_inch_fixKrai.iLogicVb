@@ -1,0 +1,127 @@
+﻿' ЧЕТЫРЕ СТЯЖКИ, ТОЧНЫЕ КРАЙНИЕ ОТСТУПЫ. Обычное внешнее правило для .ipt.
+' Выберите узкую грань и смежную пласть одного тела; порядок не важен. Для нескольких тел — по две грани.
+' Требуется одно общее прямое ребро. В окне выберите параметр ТОЧНОГО отступа до крайнего центра.
+' Пролёт D = длина ребра − 2 × отступ. Крайние промежутки s = floor((D / 3) / 32 мм) × 32 мм.
+' Три промежутка: s, D − 2s, s. Средний принимает остаток, зеркальность сохраняется.
+' Четыре шканта — по одному на 32 мм к середине от каждой стяжки. На пласти — четыре чашки.
+' До построения проверяются пересечения отверстий. Журнал: stiajka_4_ilogic.log в ProjectRoot.
+' Подключённые Modules отдельно не запускать; Python не запускается.
+AddReference "System.Drawing.dll"
+AddReference "System.Windows.Forms.dll"
+Imports Inventor
+Imports System.Collections.Generic
+Imports System.Diagnostics
+Imports System.Globalization
+Imports System.IO
+Imports System.Text
+Imports System.Text.RegularExpressions
+Imports System.Windows.Forms
+
+AddVbFile "Modules\StiajkaContext.vb"
+AddVbFile "Modules\StiajkaConfig.vb"
+AddVbFile "Modules\StiajkaSelection.vb"
+AddVbFile "Modules\StiajkaSketches.vb"
+AddVbFile "Modules\StiajkaHoles.vb"
+AddVbFile "Modules\StiajkaDialog.vb"
+AddVbFile "Modules\Stiajka_4_Layout.vb"
+
+Public Class ThisRule
+    Private Const Prefix As String = "DrillingSketch_4pcs"
+    Private Const TieCount As Integer = 4
+    Private Const OffsetDialogTitle As String = "Четыре стяжки — точный отступ от краёв"
+    Private Const OffsetDialogLabel As String = "Параметр точного отступа от каждого края до центра крайней стяжки:"
+
+    Public Sub Main()
+        app = ThisApplication
+        bodies.Clear()
+        reserved.Clear()
+        Dim logPath As String = System.IO.Path.Combine(ProjectRoot, "stiajka_4_ilogic.log")
+        Dim transaction As Inventor.Transaction = Nothing
+        Dim previousScreen As Boolean = app.ScreenUpdating
+        Dim total As Stopwatch = Nothing
+        Using writer As New StreamWriter(logPath, False, New UTF8Encoding(False))
+            log = writer
+            Try
+                WriteLog("Стяжка 4 шт. iLogic Native. " & DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"))
+                If app.ActiveDocument Is Nothing OrElse app.ActiveDocument.DocumentType <> DocumentTypeEnum.kPartDocumentObject Then
+                    Throw New Exception("Откройте деталь .ipt и выберите по две грани каждого тела.")
+                End If
+                part = DirectCast(app.ActiveDocument, PartDocument)
+                comp = part.ComponentDefinition
+                tg = app.TransientGeometry
+                factory = app.TransientObjects
+                Dim phase As Stopwatch = Stopwatch.StartNew()
+                Dim jobs As List(Of PairJob) = SelectedPairs()
+                LoadConfig()
+                LogStage("Грани, общее ребро и настройки", phase)
+                Dim edgeParam As String = ChooseOffset()
+                If String.IsNullOrEmpty(edgeParam) Then
+                    WriteLog("Отменено пользователем.")
+                    Return
+                End If
+                phase.Restart()
+                Dim offsetParam As String = SettingParameter("offset", "Стяжка_отступ")
+                Dim required As List(Of String) = RequiredParameters(edgeParam)
+                For Each name As String In required
+                    Try
+                        Dim parameter As Inventor.Parameter = comp.Parameters.Item(name)
+                    Catch
+                        Throw New Exception("В детали отсутствует параметр: " & name)
+                    End Try
+                Next
+                Dim offsetValue As Double = CDbl(comp.Parameters.Item(offsetParam).Value)
+                Dim edgeValue As Double = CDbl(comp.Parameters.Item(edgeParam).Value)
+                If offsetValue <= 0 OrElse edgeValue < 0 Then Throw New Exception("Проверьте положительный отступ стяжки и отступ от кромки.")
+                For Each job As PairJob In jobs
+                    Dim length As Double = job.Common.StartVertex.Point.DistanceTo(job.Common.StopVertex.Point)
+                    ValidateLayout(length, edgeValue)
+                    Dim span As Double = PointSpan(length, edgeValue)
+                    Dim pitch As Double = OuterPitch(span)
+                    WriteLog("Четыре стяжки: крайние промежутки " & Rounded(pitch * 10) &
+                        " мм; средний " & Rounded((span - 2 * pitch) * 10) & " мм")
+                Next
+                LogStage("Проверка параметров и чтение значений", phase)
+                transaction = app.TransactionManager.StartTransaction(part, "Четыре стяжки — iLogic Native")
+                EnsureKeep(required)
+                LogStage("Подготовка Keep_Excel_Params", phase)
+                total = Stopwatch.StartNew()
+                phase.Restart()
+                app.ScreenUpdating = False
+                BuildSketches(jobs, edgeParam, edgeValue, offsetParam, offsetValue, phase)
+                ' До этого места отверстий нет: исходные ссылки на грани ещё действительны.
+                For Each job As PairJob In jobs
+                    job.Neighbor = FindNeighbor(job)
+                Next
+                LogStage("Поиск соседних тел", phase)
+                BuildHoles(jobs)
+                LogStage("Все отверстия", phase)
+                part.Update()
+                LogStage("Обновление документа", phase)
+                transaction.End()
+                transaction = Nothing
+                app.ScreenUpdating = previousScreen
+                total.Stop()
+                WriteLog("05: Общее время построения: " & Seconds(total) & "s")
+                WriteLog("05: Готово. Пар граней: " & jobs.Count.ToString())
+                log.Flush()
+                ' MessageBox.Show("Присадка для четырёх стяжек создана." & vbCrLf & "Время построения: " & Seconds(total) & " с" &
+                                ' vbCrLf & "Журнал: " & logPath, "Четыре стяжки — iLogic Native")
+            Catch ex As Exception
+                WriteLog("ОШИБКА: " & ex.ToString())
+                If transaction IsNot Nothing Then
+                    Try
+                        transaction.Abort()
+                        WriteLog("Изменения этого запуска отменены.")
+                    Catch rollback As Exception
+                        WriteLog("Ошибка отмены: " & rollback.ToString())
+                    End Try
+                End If
+                log.Flush()
+                app.ScreenUpdating = previousScreen
+                MessageBox.Show(ex.Message & vbCrLf & "Подробности: " & logPath, "Четыре стяжки — ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            Finally
+                app.ScreenUpdating = previousScreen
+            End Try
+        End Using
+    End Sub
+End Class

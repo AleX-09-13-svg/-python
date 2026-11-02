@@ -20,6 +20,7 @@ def create_offset_drilling_sketch(
     control_edge=None,
     use_cached_operations=False,
     edge_cache=None,
+    three_ties=False,
 ):
     # Найти направление пересечения плоскостей.
     if intersection_line is None:
@@ -132,7 +133,11 @@ def create_offset_drilling_sketch(
         inventor.add_perpendicular_constraint(sketch, offset_anchor, axis, ignore_errors=False)
         # Одна линия управляет отступом и служит осью симметрии точек.
         symmetry_axis = offset_anchor
-        point_distance_value = create_sketches.drilling_point_distance(length, edge_offset_value)
+        if three_ties:
+            from stiajka.three_geometry import three_tie_span
+            point_distance_value = three_tie_span(length, edge_offset_value)
+        else:
+            point_distance_value = create_sketches.drilling_point_distance(length, edge_offset_value)
         # На второй плоскости нужны только два центра отверстий чашек.
         outer = point_distance_value / 2
         left_outer = inventor.add_sketch_point(
@@ -144,6 +149,11 @@ def create_offset_drilling_sketch(
         for point in (left_outer, right_outer):
             inventor.add_coincident_constraint(sketch, point, axis)
         inventor.add_symmetry_constraint(sketch, left_outer, right_outer, symmetry_axis)
+        cup_points = [left_outer, right_outer]
+        if three_ties:
+            middle = inventor.add_sketch_point(sketch, midpoint)
+            inventor.add_midpoint_constraint(sketch, middle, axis, ignore_errors=False)
+            cup_points.append(middle)
         # Добавить размеры и связать их с параметрами модели.
         long_dim = inventor.add_aligned_dimension(
             sketch,
@@ -178,11 +188,12 @@ def create_offset_drilling_sketch(
         long_parameter.Name = long_name
         distance_parameter.Name = distance_name
         distance_parameter.Expression = (
+            f"{long_name} - {edge_offset_param} * 2" if three_ties else
             f"floor(({long_name} - {edge_offset_param} * 2) / 32 mm) * 32 mm"
         )
         offset_dim.Parameter.Expression = offset_param
     inventor.hide_sketch_dimensions(sketch)
-    return (sketch, (left_outer, right_outer))
+    return (sketch, tuple(cup_points))
 
 
 def plane_intersection_model_line(inventor, face, reference_face):

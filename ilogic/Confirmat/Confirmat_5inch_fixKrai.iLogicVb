@@ -1,0 +1,36 @@
+' ПЯТЬ КОНФИРМАТОВ, ТОЧНЫЕ КРАЙНИЕ ОТСТУПЫ. Обычное внешнее правило для .ipt.
+' Выбор строго парами: 1) плоская грань присадки; 2) торцевая кромка или плоская грань отсчёта.
+' Для нескольких рядов повторяйте пары. На ориентире отверстия не создаются.
+' В окне: пользовательские параметры толщины и ТОЧНОГО отступа от края до крайнего центра.
+' Две зеркальные пары по 96 мм; пролёт D между крайними центрами равен длине оси минус два отступа.
+' От крайнего со стороны ориентира до среднего: floor((D / 2) / 32 мм) × 32 мм.
+' Средний смещён к ориентиру менее чем на 32 мм; если половина пролёта кратна 32 мм, остаётся посередине.
+' Неоднозначный ориентир или попадание среднего в крайнюю пару отменяет построение.
+' Журнал: 02_confirmat_5inch_ilogic.log в ProjectRoot. Modules отдельно не запускать.
+AddReference "System.Drawing.dll"
+AddReference "System.Windows.Forms.dll"
+AddReference "Autodesk.Inventor.Interop.dll"
+Imports Inventor
+Imports System.Collections.Generic
+Imports System.Diagnostics
+Imports System.Globalization
+Imports System.IO
+Imports System.Text
+Imports System.Text.RegularExpressions
+Imports System.Windows.Forms
+
+AddVbFile "Modules\ConfirmatContext.vb"
+AddVbFile "Modules\ConfirmatConfig.vb"
+AddVbFile "Modules\ConfirmatDialog.vb"
+AddVbFile "Modules\ConfirmatSketches.vb"
+AddVbFile "Modules\ConfirmatReference.vb"
+AddVbFile "Modules\ConfirmatHoles.vb"
+
+AddVbFile "Modules\ConfirmatWorkflow.vb"
+
+Public Class ThisRule
+    Public Sub Main()
+        app = ThisApplication
+        RunConfirmat(5)
+    End Sub
+End Class

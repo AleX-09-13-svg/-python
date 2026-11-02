@@ -4,15 +4,17 @@
 Внешние папки правил». Папка `ilogic/Confirmat`, добавленная для конфирматов,
 не заменяет эту настройку: для стяжек добавляется отдельная папка `ilogic/Stiajka`.
 
-Три точки запуска:
+Пять точек запуска:
 
 | Правило | Раскладка |
 | --- | --- |
-| `Stiajka_1_inch.iLogicVb` | Одна стяжка и один шкант по центру |
-| `Stiajka_2_inch.iLogicVb` | Две крайние стяжки, расстояние кратно 32 мм |
-| `Stiajka_4_inch.iLogicVb` | Четыре стяжки с равномерным шагом |
+| `Stiajka_1_inch.iLogicVb` | Пара «стяжка + шкант» симметрично вокруг середины ребра; между центрами 32 мм |
+| `Stiajka_2_inch_fixCentr.iLogicVb` | Две крайние стяжки, расстояние кратно 32 мм |
+| `Stiajka_2_inch_fixKrai.iLogicVb` | Две стяжки с точным отступом от каждого края, без округления пролёта |
+| `Stiajka_3_inch_fixKrai.iLogicVb` | Три выбранные грани, средняя стяжка по сетке 32 мм от стороны третьей грани; четыре шканта |
+| `Stiajka_4_inch_fixKrai.iLogicVb` | Четыре стяжки: крайние промежутки округлены вниз к 32 мм, средний — остаток |
 
-Все три правила перенесены из `scripts/Создание присадки`: замените пути в
+Правила 1, 2 и 4 перенесены из `scripts/Создание присадки`: замените пути в
 браузере внешних правил или в своих правилах запуска. Запускайте `.iLogicVb`
 как обычные правила iLogic, без включения Straight VB code для главного правила.
 Вспомогательные файлы находятся в подпапке `Modules`; `AddVbFile` указывает пути
@@ -32,6 +34,11 @@
 | `Modules/StiajkaDialog.vb` | Выбор отступа для вариантов 2 и 4 |
 | `Modules/Stiajka_1_Layout.vb` | Раскладка, размеры и проверки для одной стяжки |
 | `Modules/Stiajka_2_Layout.vb` | Раскладка, размеры и проверки для двух стяжек |
+| `Modules/Stiajka_2_fixKrai_Layout.vb` | Две стяжки с точными крайними отступами |
+| `Modules/Stiajka_2_fixKrai_Dialog.vb` | Выбор пользовательского параметра точного отступа для двух стяжек |
+| `Modules/Stiajka_3_Layout.vb` | Три стяжки, четыре шканта, три чашки и проверки пересечений |
+| `Modules/Stiajka_3_Dialog.vb` | Выбор пользовательского параметра точного отступа |
+| `Modules/Stiajka_3_Selection.vb` | Выбор троек граней и определение базовой стороны по третьей грани |
 | `Modules/Stiajka_4_Layout.vb` | Раскладка, размеры и проверки для четырёх стяжек |
 
 Модули — части одного класса `ThisRule` (`Partial Public Class ThisRule`).
@@ -53,8 +60,10 @@
 
 ```powershell
 python -X utf8 -B scripts/validate_ilogic_native.py --rule "ilogic/Stiajka/Stiajka_1_inch.iLogicVb" --smoke
-python -X utf8 -B scripts/validate_ilogic_native.py --rule "ilogic/Stiajka/Stiajka_2_inch.iLogicVb" --smoke
-python -X utf8 -B scripts/validate_ilogic_native.py --rule "ilogic/Stiajka/Stiajka_4_inch.iLogicVb" --smoke
+python -X utf8 -B scripts/validate_ilogic_native.py --rule "ilogic/Stiajka/Stiajka_2_inch_fixCentr.iLogicVb" --smoke
+python -X utf8 -B scripts/validate_ilogic_native.py --rule "ilogic/Stiajka/Stiajka_2_inch_fixKrai.iLogicVb" --smoke
+python -X utf8 -B scripts/validate_ilogic_native.py --rule "ilogic/Stiajka/Stiajka_3_inch_fixKrai.iLogicVb" --smoke
+python -X utf8 -B scripts/validate_ilogic_native.py --rule "ilogic/Stiajka/Stiajka_4_inch_fixKrai.iLogicVb" --smoke
 ```
 
 Проверка компилирует все подключённые файлы против API установленного Inventor
@@ -63,4 +72,5 @@ python -X utf8 -B scripts/validate_ilogic_native.py --rule "ilogic/Stiajka/Stiaj
 
 Подробности: [одна стяжка](../../docs/stiajka_1_ilogic.md),
 [две стяжки](../../docs/05_stiajka_ilogic.md),
+[три стяжки](../../docs/stiajka_3_ilogic.md),
 [четыре стяжки](../../docs/stiajka_4_ilogic.md).

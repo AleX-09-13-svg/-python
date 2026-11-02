@@ -186,6 +186,64 @@ def _confirmat_points_by_face(inventor, sketch, sketch_faces, face_label):
     return result
 
 
+def create_confirmat_two_features(
+    inventor, sketches, faces, point_jobs, face_label="selected", direction=None,
+    update_document=True,
+):
+    """Отверстия только по двум крайним центрам каждой грани."""
+    _sync_settings()
+    outer = _confirmat.confirmat_hole("outer_2pcs") or _confirmat.confirmat_hole("outer")
+    inner = _confirmat.confirmat_hole("inner_2pcs") or _confirmat.confirmat_hole("inner")
+    points = []
+    for sketch in sketches:
+        _confirmat.try_share_sketch(sketch)
+    for job in point_jobs:
+        if len(job["outer_points"]) != 2:
+            raise ValueError("Для двух конфирматов требуется ровно два центра на грани.")
+        points.extend(job["outer_points"])
+    points = inventor.unique_points(points)
+    if points:
+        _confirmat.add_confirmat_counterbore(
+            inventor, points, outer, inner, "Confirmat 2pcs grid 32mm counterbore",
+            direction=direction,
+        )
+    if update_document:
+        inventor.update()
+    return int(bool(points))
+
+
+def create_confirmat_pair_features(
+    inventor, sketches, faces, point_jobs, face_label="selected", direction=None,
+    update_document=True,
+):
+    """Создать отверстия двух пар и центрального конфирмата каждой грани."""
+    _sync_settings()
+    outer = _confirmat.confirmat_hole("outer_2pcs") or _confirmat.confirmat_hole("outer")
+    inner = _confirmat.confirmat_hole("inner_2pcs") or _confirmat.confirmat_hole("inner")
+    points = []
+    for sketch in sketches:
+        _confirmat.try_share_sketch(sketch)
+    for job in point_jobs:
+        face_points = [*job["outer_points"], *job["inner_points"]]
+        if len(face_points) != 4:
+            raise ValueError("Для двух пар требуется ровно четыре центра на грани.")
+        if job.get("center_point") is None:
+            raise ValueError("Не найден центр пятого конфирмата на грани.")
+        face_points.append(job["center_point"])
+        points.extend(face_points)
+    points = inventor.unique_points(points)
+    created = 0
+    if points:
+        _confirmat.add_confirmat_counterbore(
+            inventor, points, outer, inner, "Confirmat 5pcs pairs 96mm and center counterbore",
+            direction=direction,
+        )
+        created = 1
+    if update_document:
+        inventor.update()
+    return created
+
+
 def create_confirmat_edges_and_center_features(
     inventor,
     sketches=None,

@@ -109,7 +109,13 @@ class ReferenceEdgeTests(unittest.TestCase):
     def test_cached_inside_point_selects_opposite_side_of_shared_edge(self):
         self.check_pair(cached=True, second_sign=-1)
 
-    def check_pair(self, cached, second_sign=1):
+    def test_three_ties_match_on_both_faces_with_exact_offsets(self):
+        self.check_pair(cached=True, three_ties=True)
+
+    def test_three_ties_match_on_opposite_side_of_shared_edge(self):
+        self.check_pair(cached=True, second_sign=-1, three_ties=True)
+
+    def check_pair(self, cached, second_sign=1, three_ties=False):
         # Первая грань 120x160 мм, вторая шириной 200 мм.
         # Общее ребро 120 мм занимает только часть нижнего контура второй грани.
         first = NS(PointOnFace=point(10, 8))
@@ -186,6 +192,9 @@ class ReferenceEdgeTests(unittest.TestCase):
 
         inventor.add_aligned_dimension.side_effect = dimension
         jobs = []
+        from functools import partial
+        from stiajka.three_geometry import create_three_points
+        builder = partial(create_three_points, edge_offset_param="edge") if three_ties else None
         with contextlib.redirect_stdout(io.StringIO()):
             create_sketches_for_faces(
                 inventor, None, [first], "DrillingSketch", "edge", "test", "test",
@@ -193,16 +202,30 @@ class ReferenceEdgeTests(unittest.TestCase):
                 runtime_names=names, direct_projection=True, reference_edges={id(first): selected},
                 use_cached_operations=cached,
                 edge_cache=edge_cache,
+                point_builder=builder,
             )
             second_sketch, second_points = create_offset_drilling_sketch(
                 inventor, second, first, 2, "offset", "edge", 3.4, 2,
                 intersection_line=intersection, runtime_names=names, control_edge=selected,
                 use_cached_operations=cached,
                 edge_cache=edge_cache,
+                three_ties=three_ties,
             )
         controls = [d for d in dimensions if d.driven]
         self.assertEqual([d.value for d in controls], [12, 12])
         self.assertNotEqual(controls[0].Parameter.Name, controls[1].Parameter.Name)
+        if three_ties:
+            first_points = [*jobs[0]["outer_points"], jobs[0]["center_point"]]
+            self.assertEqual([round(p.Geometry.X, 6) for p in first_points], [6, 14, 10])
+            self.assertEqual([round(p.Geometry.X, 6) for p in second_points], [6, 14, 10])
+            self.assertEqual([round(p.Geometry.Y, 6) for p in second_points], [3.4 * second_sign] * 3)
+            self.assertEqual(len(jobs[0]["inner_points"]), 2)
+            self.assertEqual(sketches[0].SketchPoints.Add.call_count, 5)
+            self.assertEqual(sketches[1].SketchPoints.Add.call_count, 3)
+            expressions = [getattr(d.Parameter, "Expression", "") for d in dimensions]
+            self.assertEqual(sum(" - " in value and "edge" in value for value in expressions), 2)
+            self.assertFalse(any("floor(" in value for value in expressions))
+            return
         # Совпадают и продольные координаты центров, хотя габариты граней различаются.
         self.assertEqual([round(p.Geometry.X, 6) for p in jobs[0]["outer_points"]], [6.8, 13.2])
         self.assertEqual([round(p.Geometry.X, 6) for p in second_points], [6.8, 13.2])

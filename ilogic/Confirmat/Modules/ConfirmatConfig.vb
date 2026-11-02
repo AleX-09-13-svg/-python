@@ -1,4 +1,4 @@
-﻿' Straight VB code. Part of the Confirmat rule; do not run separately.
+' Straight VB code. Part of the Confirmat rule; do not run separately.
 Imports System
 Imports Inventor
 Imports System.Collections.Generic
@@ -10,14 +10,9 @@ Imports System.Text.RegularExpressions
 Imports System.Windows.Forms
 
 Partial Public Class ThisRule
-    Private Function ConfirmatCount(value As Double) As Integer
-        If value = 2 OrElse value = 3 Then Return CInt(value)
-        Throw New Exception("Параметр количества конфирматов должен быть равен 2 или 3.")
-    End Function
-
     Private Function RequiredParameters(thickness As String, edgeOffset As String) As List(Of String)
         Dim result As New List(Of String) From {thickness, edgeOffset}
-        For Each key As String In New String() {"outer_2pcs", "inner_2pcs", "outer_3pcs", "inner_3pcs"}
+        For Each key As String In New String() {"outer_2pcs", "inner_2pcs"}
             For Each field As String In New String() {"diameter", "depth"}
                 Dim expression As String = Text(Block(st, key), field, "")
                 If expression = "" Then Throw New Exception("Нет настройки confirmat." & key & "." & field)
@@ -28,35 +23,12 @@ Partial Public Class ThisRule
         Return result
     End Function
 
-    Private Sub EnsureCountKeep(source As Inventor.Parameter)
-        Dim units As String = CStr(source.Units).Trim()
-        If units.ToLowerInvariant() = "text" OrElse units.ToLowerInvariant() = "boolean" Then Throw New Exception("Количество должно быть числовым параметром.")
-        Dim expression As String = CountKeepExpression(source.Name, units)
-        Dim parameter As Inventor.Parameter = Nothing
-        Try
-            parameter = comp.Parameters.Item("Keep_Excel_Params_Unitless")
-        Catch
-        End Try
-        If parameter Is Nothing Then
-            comp.Parameters.UserParameters.AddByExpression("Keep_Excel_Params_Unitless", expression, UnitsTypeEnum.kUnitlessUnits)
-        ElseIf Regex.Replace(parameter.Expression, "\s+", "") <> Regex.Replace(expression, "\s+", "") Then
-            parameter.Expression = expression
-        End If
-    End Sub
-
-    Private Function CountKeepExpression(name As String, units As String) As String
-        If units = "" OrElse units.ToLowerInvariant() = "ul" Then Return name & " * 0"
-        Return "(" & name & " / (1 " & units & ")) * 0"
-    End Function
-
     Private Sub LoadConfig()
         ' Настройки iLogic автономны. Имена ниже — параметры открытой детали.
         ' Диаметры и глубины вычисляет Inventor; числовые значения здесь не дублируются.
         st = New Dictionary(Of String, Object) From {
             {"outer_2pcs", HoleSettings("M_Конфирмат_D_вПласть", "M_Конфирмат_сквозное_отв", "positive", "Confirmat 2pcs counterbore")},
-            {"inner_2pcs", HoleSettings("M_Конфирмат_D_вТорец", "M_Конфирмат_длина", "positive", "Confirmat 2pcs inner")},
-            {"outer_3pcs", HoleSettings("M_Конфирмат_D_вПласть", "M_Конфирмат_сквозное_отв", "positive", "Confirmat counterbore")},
-            {"inner_3pcs", HoleSettings("M_Конфирмат_D_вТорец", "M_Конфирмат_длина", "positive", "Confirmat inner")}}
+            {"inner_2pcs", HoleSettings("M_Конфирмат_D_вТорец", "M_Конфирмат_длина", "positive", "Confirmat 2pcs inner")}}
         WriteLog("Настройки: встроенные в правило iLogic; размеры из параметров детали.")
     End Sub
 

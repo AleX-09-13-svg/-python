@@ -126,7 +126,7 @@ Partial Public Class ThisRule
         span.Parameter.Expression = name & " - " & edgeParam & " * 2"
         Dim pitch As Object = dims.AddTwoPointDistance(ties(1), ties(0), DimensionOrientationEnum.kAlignedDim, pitchText, False)
         pitch.Parameter.Name = AvailableName(comp.Parameters, "Шаг_между_стяжками_4", "parameter")
-        pitch.Parameter.Expression = span.Parameter.Name & " / 3"
+        pitch.Parameter.Expression = "floor((" & span.Parameter.Name & " / 3) / 32 mm) * 32 mm"
     End Sub
 
     Private Function RequiredParameters(edgeParam As String) As List(Of String)
@@ -156,15 +156,25 @@ Partial Public Class ThisRule
 
     Private Function PointSpan(length As Double, offset As Double) As Double
         Dim span As Double = length - 2 * offset
-        If Double.IsNaN(span) OrElse Double.IsInfinity(span) OrElse offset < 0 OrElse span / 3 <= 2 * StepCm + Tol Then
-            Throw New Exception("Недостаточно места для четырёх стяжек со шкантами: шаг должен быть больше 64 мм. Уменьшите отступ или выберите более длинное ребро.")
+        If Double.IsNaN(span) OrElse Double.IsInfinity(span) OrElse offset < 0 Then
+            Throw New Exception("Проверьте длину и неотрицательный отступ от края.")
+        End If
+        If OuterPitch(span) <= 2 * StepCm + Tol Then
+            Throw New Exception("Недостаточно места для четырёх стяжек со шкантами: крайний шаг после округления к 32 мм должен быть больше 64 мм. Уменьшите отступ или выберите более длинное ребро.")
         End If
         Return span
     End Function
 
     Private Function TiePositions(length As Double, offset As Double) As Double()
         Dim span As Double = PointSpan(length, offset)
-        Return New Double() {-span / 2, -span / 6, span / 6, span / 2}
+        Dim pitch As Double = OuterPitch(span)
+        Return New Double() {-span / 2, -span / 2 + pitch, span / 2 - pitch, span / 2}
+    End Function
+
+    Private Function OuterPitch(span As Double) As Double
+        Dim steps As Double = span / 3 / StepCm
+        If Math.Abs(steps - Math.Round(steps)) <= 0.000000000001 Then steps = Math.Round(steps)
+        Return Math.Floor(steps) * StepCm
     End Function
 
     Private Function DowelPositions(ties As Double()) As Double()

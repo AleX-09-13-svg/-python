@@ -1,4 +1,4 @@
-# Выбор толщины, отступа и параметра количества конфирматов.
+# Выбор толщины и фиксированного отступа двух пар конфирматов.
 import tkinter as tk
 from tkinter import ttk
 from common.constants import PARAMETERS
@@ -9,115 +9,70 @@ DEFAULT_FRAME_EDGE_OFFSET_PARAMS = (PARAMETERS.edge_offset,)
 DEFAULT_CONFIRMAT_COUNT_PARAMS = ("Количество_конфирматов", "Конфирмат_количество")
 
 
-def choose_workflow_parameters(inventor, parameter_cache=None):
-    selected = {
-        "thickness": None,
-        "frame_edge_offset": None,
-        "confirmat_count_param": None,
-    }
+def user_parameter_options(names, preferred):
+    """Все существующие пользовательские параметры; подходящие — первыми."""
+    available = set(names)
+    return unique_names((*[name for name in preferred if name in available], *sorted(names)))
+
+
+def choose_workflow_parameters(inventor, parameter_cache=None, *, two_confirmats=False):
+    from tkinter import messagebox
+
+    selected = [None, None]
     names = all_parameter_names(inventor, include_model=False, parameter_cache=parameter_cache)
-    thickness_options = thickness_parameter_options(names)
-    offset_options = frame_edge_offset_parameter_options(names)
-    count_options = confirmat_count_parameter_options(names)
-
+    thickness_options = user_parameter_options(names, thickness_parameter_options(names))
+    offset_options = user_parameter_options(names, frame_edge_offset_parameter_options(names))
     root = tk.Tk()
-    root.title(
-        "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u043f\u0430\u0440\u0430\u043c\u0435\u0442\u0440\u044b \u043f\u0440\u0438\u0441\u0430\u0434\u043a\u0438"
-    )
-    root.geometry("680x340+80+80")
+    root.title("Конфирматы — 2 шт., шаг 32 мм" if two_confirmats
+               else "Конфирматы — две пары по 96 мм и один по центру")
+    root.geometry("680x280+80+80")
     root.resizable(False, False)
-
     frame = ttk.Frame(root, padding=12)
     frame.pack(fill=tk.BOTH, expand=True)
 
-    thickness_label = ttk.Label(
-        frame,
-        text="\u041f\u0430\u0440\u0430\u043c\u0435\u0442\u0440 \u0442\u043e\u043b\u0449\u0438\u043d\u044b \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u0430:",
-    )
-    thickness_label.pack(anchor=tk.W)
-
-    thickness_value = tk.StringVar(
-        value=thickness_options[0] if thickness_options else "",
-    )
-    thickness_combo = ttk.Combobox(
-        frame,
-        textvariable=thickness_value,
-        values=thickness_options,
-        state="normal",
-    )
+    ttk.Label(frame, text="Параметр толщины материала:").pack(anchor=tk.W)
+    thickness_value = tk.StringVar(value=thickness_options[0] if thickness_options else "")
+    thickness_combo = ttk.Combobox(frame, textvariable=thickness_value,
+                                  values=thickness_options, state="readonly")
     thickness_combo.pack(fill=tk.X, pady=(6, 10))
-
-    offset_label = ttk.Label(
-        frame,
-        text="\u041f\u0430\u0440\u0430\u043c\u0435\u0442\u0440 \u043e\u0442\u0441\u0442\u0443\u043f\u0430 \u043e\u0442 \u043a\u0440\u043e\u043c\u043a\u0438 \u043a\u0430\u0440\u043a\u0430\u0441\u0430:",
-    )
-    offset_label.pack(anchor=tk.W)
-
+    offset_label = ("Пользовательский параметр минимального отступа от края до центра:"
+                    if two_confirmats else "Пользовательский параметр отступа от края до ближайшего центра:")
+    ttk.Label(frame, text=offset_label).pack(anchor=tk.W)
     offset_value = tk.StringVar(value=offset_options[0] if offset_options else "")
-    offset_combo = ttk.Combobox(
-        frame,
-        textvariable=offset_value,
-        values=offset_options,
-        state="normal",
-    )
-    offset_combo.pack(fill=tk.X, pady=(6, 12))
-
-    count_label = ttk.Label(
-        frame,
-        text="\u041f\u0430\u0440\u0430\u043c\u0435\u0442\u0440 \u043a\u043e\u043b\u0438\u0447\u0435\u0441\u0442\u0432\u0430 \u043a\u043e\u043d\u0444\u0438\u0440\u043c\u0430\u0442\u043e\u0432:",
-    )
-    count_label.pack(anchor=tk.W)
-
-    count_value = tk.StringVar(value=count_options[0] if count_options else "")
-    count_combo = ttk.Combobox(
-        frame,
-        textvariable=count_value,
-        values=count_options,
-        state="normal",
-    )
-    count_combo.pack(fill=tk.X, pady=(6, 12))
-    thickness_combo.focus_set()
-    thickness_combo.selection_range(0, tk.END)
-
+    offset_combo = ttk.Combobox(frame, textvariable=offset_value,
+                               values=offset_options, state="readonly")
+    offset_combo.pack(fill=tk.X, pady=(6, 10))
+    description = ("Два конфирмата симметрично; расстояние между центрами кратно 32 мм."
+                   if two_confirmats else "Всего 5 конфирматов: две пары по 96 мм и один по центру.")
+    hint = ("Фактический отступ с каждого края не меньше выбранного минимума."
+            if two_confirmats else "Расстояние между парами определяется длиной грани.")
+    ttk.Label(frame, text=description).pack(anchor=tk.W)
+    ttk.Label(frame, text=hint).pack(anchor=tk.W, pady=(0, 12))
     buttons = ttk.Frame(frame)
     buttons.pack(fill=tk.X)
 
-    def load_model_parameters():
-        model_button.config(state=tk.DISABLED)
-        root.update_idletasks()
-        extra = cached_parameter_names(getattr(inventor, "model_parameters", None), parameter_cache)
-        combined = unique_names((*names, *extra))
-        thickness_combo.config(values=thickness_parameter_options(combined))
-        offset_combo.config(values=frame_edge_offset_parameter_options(combined))
-        count_combo.config(values=confirmat_count_parameter_options(combined))
-
-    model_button = ttk.Button(buttons, text="Загрузить параметры модели", command=load_model_parameters)
-    model_button.pack(side=tk.LEFT)
-
     def accept():
-        selected["thickness"] = thickness_value.get().strip()
-        selected["frame_edge_offset"] = offset_value.get().strip()
-        selected["confirmat_count_param"] = count_value.get().strip()
+        thickness = thickness_value.get().strip()
+        if thickness not in names:
+            messagebox.showerror("Параметры присадки", "Выберите параметр толщины материала.", parent=root)
+            return
+        offset = offset_value.get().strip()
+        if offset not in names:
+            messagebox.showerror("Параметры присадки", "Выберите пользовательский параметр отступа.", parent=root)
+            offset_combo.focus_set()
+            return
+        selected[:] = [thickness, offset]
         root.destroy()
 
-    def cancel():
-        root.destroy()
-
-    ok_button = ttk.Button(buttons, text="OK", command=accept)
-    ok_button.pack(side=tk.RIGHT)
-    cancel_button = ttk.Button(buttons, text="\u041e\u0442\u043c\u0435\u043d\u0430", command=cancel)
-    cancel_button.pack(side=tk.RIGHT, padx=(0, 8))
-
+    ttk.Button(buttons, text="OK", command=accept).pack(side=tk.RIGHT)
+    ttk.Button(buttons, text="Отмена", command=root.destroy).pack(side=tk.RIGHT, padx=(0, 8))
+    thickness_combo.focus_set()
+    thickness_combo.selection_range(0, tk.END)
     root.bind("<Return>", lambda event: accept())
-    root.bind("<Escape>", lambda event: cancel())
-    root.protocol("WM_DELETE_WINDOW", cancel)
+    root.bind("<Escape>", lambda event: root.destroy())
+    root.protocol("WM_DELETE_WINDOW", root.destroy)
     root.mainloop()
-
-    return (
-        selected["thickness"],
-        selected["frame_edge_offset"],
-        selected["confirmat_count_param"],
-    )
+    return tuple(selected)
 
 
 def thickness_parameter_options(names):

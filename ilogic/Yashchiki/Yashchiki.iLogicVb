@@ -1,4 +1,12 @@
-' Присадка ящиков. Выберите три плоские грани с Ctrl, затем запустите правило.
+' ЯЩИКИ. Обычное внешнее правило для многотельной .ipt-детали.
+' Выберите с Ctrl ровно три плоские грани: большую пласть, боковую и нижнюю базы.
+' Порядок выбора не важен: пласть определяется по большей площади, базы — по длинам рёбер.
+' Базы должны быть взаимно перпендикулярны, их плоскости — проходить через смежные рёбра пласти.
+' Длинное базовое ребро считается нижним, короткое — боковым; квадратная пласть не подходит.
+' Окна параметров нет. Диаметр трёх кругов задаётся параметром Наколка_D.
+' Центры: 37, 165 и 261 мм от боковой базы; все в 23 мм от нижней базы.
+' Вырез только в соседнем теле: входная грань должна находиться в 5 мм от эскиза.
+' Длина выреза — 7 мм от плоскости эскиза, с учётом зазора 5 мм. При ошибке — откат транзакции.
 AddReference "System.Windows.Forms.dll"
 Imports Inventor
 Imports System.Collections.Generic
@@ -22,7 +30,7 @@ Public Class ThisRule
             End If
             Dim part As PartDocument = DirectCast(app.ActiveDocument, PartDocument)
             comp = part.ComponentDefinition : tg = app.TransientGeometry
-            If part.SelectSet.Count <> 3 Then Throw New Exception("Выберите с Ctrl ровно три грани: пласть для эскиза, боковую и нижнюю базы.")
+            If part.SelectSet.Count <> 3 Then Throw New Exception("Выберите с Ctrl ровно три грани: большую пласть, боковую и нижнюю базы. Порядок выбора не важен.")
             Dim faces As New List(Of Face)
             For Each entity As Object In part.SelectSet
                 Dim f As Face = TryCast(entity, Face)

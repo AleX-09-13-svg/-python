@@ -1,6 +1,5 @@
-﻿' Native iLogic equivalent of 02_confirmat.py.
-AddReference "System.Drawing.dll"
-AddReference "System.Windows.Forms.dll"
+' Straight VB code. Shared workflow for two and five confirmats.
+Imports System
 Imports Inventor
 Imports System.Collections.Generic
 Imports System.Diagnostics
@@ -10,23 +9,19 @@ Imports System.Text
 Imports System.Text.RegularExpressions
 Imports System.Windows.Forms
 
-AddVbFile "Modules\ConfirmatContext.vb"
-AddVbFile "Modules\ConfirmatConfig.vb"
-AddVbFile "Modules\ConfirmatDialog.vb"
-AddVbFile "Modules\ConfirmatSketches.vb"
-AddVbFile "Modules\ConfirmatHoles.vb"
-
-Public Class ThisRule
-    Public Sub Main()
+Partial Public Class ThisRule
+    Private Sub RunConfirmat(count As Integer)
+        layoutCount = count
         app = ThisApplication
         reserved.Clear()
-        Dim logPath As String = System.IO.Path.Combine(ProjectRoot, "02_confirmat_ilogic.log")
+        referenceSides.Clear()
+        Dim logPath As String = System.IO.Path.Combine(ProjectRoot, "02_confirmat_" & count.ToString() & "inch_ilogic.log")
         Dim transaction As Inventor.Transaction = Nothing
         Dim previousScreen As Boolean = app.ScreenUpdating
         Using writer As New StreamWriter(logPath, False, New UTF8Encoding(False))
             log = writer
             Try
-                WriteLog("02 Конфирмат Native. " & DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"))
+                WriteLog("02 Конфирмат Native — " & count.ToString() & " шт. " & DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"))
                 If app.ActiveDocument Is Nothing OrElse app.ActiveDocument.DocumentType <> DocumentTypeEnum.kPartDocumentObject Then
                     Throw New Exception("Откройте деталь .ipt и выберите плоские грани для присадки.")
                 End If
@@ -38,16 +33,18 @@ Public Class ThisRule
                 LoadConfig()
                 Dim chosen() As String = ChooseParameters()
                 If chosen Is Nothing Then Return
-                Dim thickness As String = chosen(0), edgeOffset As String = chosen(1), countName As String = chosen(2)
-                Dim countParameter As Inventor.Parameter = comp.Parameters.Item(countName)
-                Dim count As Integer = ConfirmatCount(CDbl(countParameter.Value))
+                Dim thickness As String = chosen(0), edgeOffset As String = chosen(1)
+                ' Выбранные имена должны принадлежать пользовательской коллекции.
+                Dim thicknessUser As UserParameter = comp.Parameters.UserParameters.Item(thickness)
+                Dim offsetUser As UserParameter = comp.Parameters.UserParameters.Item(edgeOffset)
                 If CDbl(comp.Parameters.Item(thickness).Value) <= 0 Then Throw New Exception("Толщина должна быть положительной.")
                 Dim edgeValue As Double = CDbl(comp.Parameters.Item(edgeOffset).Value)
                 If edgeValue < 0 Then Throw New Exception("Отступ от кромки не должен быть отрицательным.")
                 ' Как в 02: глубина широкого участка равна выбранной толщине.
-                For Each key As String In New String() {"outer_2pcs", "outer_3pcs"}
+                For Each key As String In New String() {"outer_2pcs"}
                     Dim values As Dictionary(Of String, Object) = Block(st, key)
                     values("depth") = thickness
+                    values("feature_name") = "Confirmat " & count.ToString() & "pcs counterbore"
                     st(key) = values
                 Next
                 Dim required As List(Of String) = RequiredParameters(thickness, edgeOffset)
@@ -60,15 +57,14 @@ Public Class ThisRule
                     If Not groups.ContainsKey(key) Then groups(key) = New List(Of Face)
                     groups(key).Add(face)
                 Next
-                transaction = app.TransactionManager.StartTransaction(part, "02 Конфирмат — iLogic Native")
+                transaction = app.TransactionManager.StartTransaction(part, "02 Конфирмат " & count.ToString() & " шт. — iLogic Native")
                 EnsureKeep(required)
-                EnsureCountKeep(countParameter)
                 Dim total As Stopwatch = Stopwatch.StartNew(), phase As Stopwatch = Stopwatch.StartNew()
                 app.ScreenUpdating = False
                 Dim jobs As List(Of SketchJob) = BuildSketches(groups, thickness, edgeOffset, edgeValue)
                 LogStage("Все эскизы", phase)
                 ' Исходные грани больше не используются после начала сверления.
-                BuildHoles(jobs, countParameter)
+                BuildHoles(jobs)
                 LogStage("Все отверстия", phase)
                 part.Update()
                 LogStage("Обновление документа", phase)
@@ -78,8 +74,6 @@ Public Class ThisRule
                 total.Stop()
                 WriteLog("Общее время построения: " & Seconds(total) & "s")
                 log.Flush()
-                ' MessageBox.Show("Присадка конфирматов создана. Количество: " & count.ToString() & vbCrLf &
-                                ' "Время построения: " & Seconds(total) & " с" & vbCrLf & "Журнал: " & logPath, "02 — iLogic Native")
             Catch ex As Exception
                 WriteLog("ОШИБКА: " & ex.ToString())
                 If transaction IsNot Nothing Then

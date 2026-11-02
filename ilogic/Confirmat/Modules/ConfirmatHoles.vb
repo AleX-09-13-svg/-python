@@ -64,7 +64,7 @@ Partial Public Class ThisRule
         Throw New Exception("Неизвестное направление отверстия: " & value)
     End Function
 
-    Private Sub BuildHoles(jobs As List(Of SketchJob), countParameter As Inventor.Parameter)
+    Private Sub BuildHoles(jobs As List(Of SketchJob))
         For Each job As SketchJob In jobs
             Dim shareableSketch As Object = job.Sketch
             Try
@@ -72,11 +72,6 @@ Partial Public Class ThisRule
             Catch
             End Try
             Dim edgeFeatures As List(Of HoleFeature) = AddCounterbore(job.Edges, "outer_2pcs", "inner_2pcs", "Confirmat edges")
-            Dim centerFeatures As List(Of HoleFeature) = AddCounterbore(job.Centers, "outer_3pcs", "inner_3pcs", "Confirmat center")
-            For Each feature As HoleFeature In centerFeatures
-                ' Условие сохраняется в модели и реагирует на изменение количества.
-                feature.SetSuppressionCondition(countParameter, 60417, 2)
-            Next
             OptionalDisplay("Скрытие эскиза", Sub() job.Sketch.Visible = False)
         Next
     End Sub

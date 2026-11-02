@@ -177,6 +177,7 @@ def _create_drilling_sketch_fixed(
     runtime_names=None,
     control_line=None,
     add_side_reference=True,
+    point_builder=None,
 ):
     print(
         f"  build drilling geometry: sketch={getattr(sketch, 'Name', '<unknown>')}, "
@@ -229,6 +230,11 @@ def _create_drilling_sketch_fixed(
         long_edge_length = control_length
     print("    long edge length:", round(long_edge_length, 4), flush=True)
     started = log_stage("Построение осей", started)
+
+    if point_builder is not None:
+        point_axes = (*axes[:3], long_edge_length, *axes[4:])
+        return point_builder(inventor, sketch, point_axes, index, edge_offset_value, runtime_names,
+                             control_line=control_line)
 
     if callable(edge_offset_param):
         edge_offset_param = edge_offset_param(long_edge_length)
@@ -328,6 +334,7 @@ def create_sketches_for_faces(
     use_cached_operations=False,
     edge_cache=None,
     compact_points=None,
+    point_builder=None,
 ):
     if direct_projection and reuse_existing:
         raise ValueError("Прямая проекция доступна только для новых эскизов.")
@@ -424,6 +431,7 @@ def create_sketches_for_faces(
                     runtime_names=runtime_names,
                     control_line=control_line,
                     add_side_reference=not direct_projection,
+                    point_builder=point_builder,
                 )
                 if points:
                     count += 1

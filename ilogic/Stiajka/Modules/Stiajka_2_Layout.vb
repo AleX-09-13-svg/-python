@@ -155,6 +155,7 @@ Partial Public Class ThisRule
         Return unique
     End Function
 
+    ' Отступ — минимальный: округляем пролёт вниз к 32 мм, фактический отступ может увеличиться.
     Private Function PointSpan(length As Double, offset As Double) As Double
         Dim span As Double = Math.Floor((length - 2 * offset) / StepCm) * StepCm
         If offset < 0 OrElse span < 2 * StepCm Then Throw New Exception("Недостаточно места: расстояние крайних точек должно быть не меньше 64 мм.")

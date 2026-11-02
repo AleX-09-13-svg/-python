@@ -1,4 +1,4 @@
-# Настройки стяжки и создание отверстий для сценария 05_stiajka.py.
+# Настройки стяжки и создание отверстий для сценария 05_stiajka_2inch.py.
 from time import perf_counter
 
 from common.constants import DRILLING_SKETCH_PREFIX

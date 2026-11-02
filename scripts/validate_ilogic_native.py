@@ -9,7 +9,7 @@ import tempfile
 
 
 ROOT = Path(__file__).resolve().parents[1]
-RULE = ROOT / "ilogic" / "Stiajka" / "Stiajka_2_inch.iLogicVb"
+RULE = ROOT / "ilogic" / "Stiajka" / "Stiajka_2_inch_fixCentr.iLogicVb"
 
 
 SMOKE_METHOD = '''
@@ -136,15 +136,16 @@ CONFIRMAT_SMOKE_METHOD = '''
                 log = writer
                 LoadConfig()
                 Dim result As New Dictionary(Of String, Object)
-                For Each key As String In New String() {"outer_2pcs", "inner_2pcs", "outer_3pcs", "inner_3pcs"}
+                For Each key As String In New String() {"outer_2pcs", "inner_2pcs"}
                     For Each field As String In New String() {"diameter", "depth"}
                         result(key & "." & field) = ResolveExpression(Text(Block(st, key), field, ""))
                     Next
                 Next
+                layoutCount = 2
+                result("twoPositions") = PointPositions(60.7, 5)
+                result("span32") = PointSpan(13.2, 5)
                 result("span64") = PointSpan(12, 2)
                 result("spanLong") = PointSpan(40, 5)
-                result("count2") = ConfirmatCount(2)
-                result("count3") = ConfirmatCount(3)
                 Dim rejected As Boolean = False
                 Try
                     PointSpan(8, 3)
@@ -154,13 +155,33 @@ CONFIRMAT_SMOKE_METHOD = '''
                 result("shortRejected") = rejected
                 rejected = False
                 Try
-                    ConfirmatCount(2.5)
+                    layoutCount = 5
+                    PointPositions(29.2, 5)
                 Catch
                     rejected = True
                 End Try
-                result("invalidCountRejected") = rejected
-                result("unitlessKeep") = CountKeepExpression("count", "ul")
-                result("lengthKeep") = CountKeepExpression("count", "mm")
+                result("overlapRejected") = rejected
+                result("fivePositions") = PointPositions(60.7, 5)
+                result("fiveReverse") = PointPositions(60.7, 5, False)
+                result("exactMiddle") = PointPositions(61.2, 5)(2)
+                result("anchorLeft") = AnchorByDistances(1, 50)
+                result("anchorRight") = AnchorByDistances(50, 1)
+                result("edgeDistance") = SegmentDistance(0, 2, 1.6, 0, 0, 0, 0, 4, 0)
+                result("reverseEdgeDistance") = SegmentDistance(0, 2, 1.6, 0, 4, 0, 0, 0, 0)
+                rejected = False
+                Try
+                    AnchorByDistances(5, 5)
+                Catch
+                    rejected = True
+                End Try
+                result("ambiguousAnchorRejected") = rejected
+                rejected = False
+                Try
+                    PointPositions(32.4, 5)
+                Catch
+                    rejected = True
+                End Try
+                result("middleCollisionRejected") = rejected
                 OptionalDisplay("color test", Sub()
                     Throw New System.Runtime.InteropServices.COMException("E_FAIL test", -2147467259)
                 End Sub)
@@ -172,7 +193,7 @@ CONFIRMAT_SMOKE_METHOD = '''
 '''
 
 
-def smoke_check(output, interop, four=False, one=False, confirmat=False, petli=False):
+def smoke_check(output, interop, four=False, one=False, confirmat=False, petli=False, three=False, fixed_two=False):
     def literal(path):
         return "'" + str(path).replace("'", "''") + "'"
 
@@ -195,18 +216,31 @@ def smoke_check(output, interop, four=False, one=False, confirmat=False, petli=F
         check_petli_snapshot(snapshot)
         return
     if confirmat:
-        for key in ("outer_2pcs", "inner_2pcs", "outer_3pcs", "inner_3pcs"):
+        for key in ("outer_2pcs", "inner_2pcs"):
             expected = ("M_Конфирмат_D_вПласть", "M_Конфирмат_сквозное_отв") if key.startswith("outer") else ("M_Конфирмат_D_вТорец", "M_Конфирмат_длина")
             for field, value in zip(("diameter", "depth"), expected):
                 assert snapshot[key + "." + field] == value, (key, field)
         assert abs(snapshot["span64"] - 6.4) < 1e-9
         assert abs(snapshot["spanLong"] - 28.8) < 1e-9
-        assert snapshot["count2"] == 2 and snapshot["count3"] == 3
-        assert snapshot["shortRejected"] and snapshot["invalidCountRejected"]
-        assert snapshot["unitlessKeep"] == "count * 0"
-        assert snapshot["lengthKeep"] == "(count / (1 mm)) * 0"
+        assert snapshot["shortRejected"] and snapshot["overlapRejected"]
+        assert abs(snapshot["span32"] - 3.2) < 1e-9
+        two = snapshot["twoPositions"]
+        assert len(two) == 2 and abs(two[0] + 24) < 1e-9 and abs(two[1] - 24) < 1e-9
+        assert (60.7 - (two[1] - two[0])) / 2 >= 5
+        five = snapshot["fivePositions"]
+        assert len(five) == 5 and abs(five[2] + 2.95) < 1e-9
+        assert abs(five[0] + 25.35) < 1e-9 and abs(five[-1] - 25.35) < 1e-9
+        assert abs(five[1] - five[0] - 9.6) < 1e-9
+        assert abs(five[-1] - five[-2] - 9.6) < 1e-9
+        assert abs(five[2] - five[0] - 22.4) < 1e-9
+        assert all(abs(a + b) < 1e-9 for a, b in zip(five, reversed(snapshot["fiveReverse"])))
+        assert abs(snapshot["exactMiddle"]) < 1e-9
+        assert snapshot["anchorLeft"] is True and snapshot["anchorRight"] is False
+        assert abs(snapshot["edgeDistance"] - 1.6) < 1e-9
+        assert abs(snapshot["reverseEdgeDistance"] - 1.6) < 1e-9
+        assert snapshot["ambiguousAnchorRejected"] and snapshot["middleCollisionRejected"]
         assert snapshot["displayErrorIgnored"]
-        print("Confirmat built-in settings, spacing, count and Keep expressions OK; no configuration files read. No Inventor model was run.")
+        print("Confirmat 2/5 layouts, built-in settings, grid spacing and overlap checks OK; no configuration files read. No Inventor model was run.")
         return
     expected = {"diameter": "Стяжка_D", "depth": "Стяжкаh_резьбаШтока_Петля", "offset": "Стяжка_отступ"}
     for key, diameter, depth, direction in (
@@ -226,18 +260,54 @@ def smoke_check(output, interop, four=False, one=False, confirmat=False, petli=F
         assert snapshot["centers"] == [-1.6, 1.6]
         assert snapshot["edgeRejected"] is True
         assert snapshot["overlapRejected"] is True
+    elif three:
+        from stiajka.three_geometry import three_tie_span
+        import math
+        span = three_tie_span(60.7, 5.05)
+        pitch = math.floor(span / 2 / 3.2) * 3.2
+        ties, dowels = snapshot["ties"], snapshot["dowels"]
+        assert len(ties) == 3 and len(dowels) == 4
+        for actual, expected in zip(ties, (-span / 2, -span / 2 + pitch, span / 2)):
+            assert abs(actual - expected) < 1e-9
+        assert abs((ties[1] - ties[0]) / 3.2 - round((ties[1] - ties[0]) / 3.2)) < 1e-9
+        assert 0 <= -ties[1] < 3.2
+        reverse = snapshot["reverseTies"]
+        assert all(abs(a + b) < 1e-9 for a, b in zip(ties, reversed(reverse)))
+        assert abs(snapshot["exactPitch"] - 25.6) < 1e-9
+        assert snapshot["offsetOptions"] == ["CustomOffset", "CustomThickness"]
+        assert snapshot["referenceStart"] is True and snapshot["referenceEnd"] is False
+        assert snapshot["ambiguousReferenceRejected"]
+        assert snapshot["axisAnchors"] == [True, False, False, True]
+        assert abs(60.7 / 2 + ties[0] - 5.05) < 1e-9
+        assert abs(60.7 / 2 - ties[2] - 5.05) < 1e-9
+        assert abs(dowels[0] - ties[0] - 3.2) < 1e-9
+        assert abs(ties[2] - dowels[1] - 3.2) < 1e-9
+        for actual, shift in zip(dowels[2:], (-3.2, 3.2)):
+            assert abs(actual - ties[1] - shift) < 1e-9
+        assert all(abs(a + b) < 1e-9 for a, b in zip(sorted(dowels), reversed(sorted(snapshot["reverseDowels"]))))
+        assert snapshot["centralOverlapRejected"]
+        assert snapshot["overlapRejected"] is True
     elif four:
         assert abs(snapshot["spanLong"] - 30) < 1e-9
         ties = snapshot["ties"]
         dowels = snapshot["dowels"]
         assert len(ties) == len(dowels) == 4
         assert abs(ties[0] + 25) < 1e-9 and abs(ties[-1] - 25) < 1e-9
-        for i in range(3):
-            assert abs(ties[i + 1] - ties[i] - 50 / 3) < 1e-9
+        assert abs(ties[1] - ties[0] - 16) < 1e-9
+        assert abs(ties[3] - ties[2] - 16) < 1e-9
+        assert abs(ties[2] - ties[1] - 18) < 1e-9
+        assert abs(snapshot["exactOuterPitch"] - 19.2) < 1e-9
+        assert snapshot["roundedShortRejected"]
         for i in range(4):
             assert abs(abs(dowels[i] - ties[i]) - 3.2) < 1e-9
             assert abs(dowels[i] + dowels[3 - i]) < 1e-9
         assert snapshot["overlapRejected"] is True
+    elif fixed_two:
+        assert abs(snapshot["span64"] - 8) < 1e-9
+        assert abs(snapshot["spanLong"] - 30) < 1e-9
+        assert abs(snapshot["fixedSpan"] - 50.6) < 1e-9
+        assert abs((60.7 - snapshot["fixedSpan"]) / 2 - 5.05) < 1e-9
+        assert abs(snapshot["minimumSpan"] - 6.4) < 1e-9
     else:
         assert abs(snapshot["span64"] - 6.4) < 1e-9
         assert abs(snapshot["spanLong"] - 28.8) < 1e-9
@@ -333,8 +403,16 @@ def main():
     if re.search(r'(?i)\.json|Deserialize|ReadAllText|ReadAllBytes', combined):
         parser.error("Правила iLogic должны работать без чтения файлов конфигурации.")
     four = "Private Const TieCount As Integer = 4" in combined
+    three = "Private Const TieCount As Integer = 3" in combined
+    fixed_two = "Private Const FixedEdgeLayout As Boolean = True" in combined
     one = "Private Const TieCount As Integer = 1" in combined
     confirmat = 'Private Const Workflow As String = "confirmat"' in combined
+    if confirmat:
+        # Без этой ссылки внешний компилятор проходил проверку за счёт
+        # /reference ниже, хотя iLogic не видел типы из подключённых модулей.
+        rule_header = args.rule.read_text(encoding="utf-8-sig")
+        if not re.search(r'(?im)^\s*AddReference\s+"Autodesk\.Inventor\.Interop(?:\.dll)?"\s*$', rule_header):
+            parser.error("Главное правило Confirmat должно явно подключать Autodesk.Inventor.Interop.dll через AddReference.")
     petli = 'Private Const Workflow As String = "petli"' in combined
     # ThisApplication предоставляет iLogic. Для проверки вне iLogic нужна
     # только декларация свойства; сам Inventor и документ не запускаются.
@@ -344,6 +422,12 @@ def main():
     )
     if args.smoke:
         method = PETLI_SMOKE_METHOD if petli else CONFIRMAT_SMOKE_METHOD if confirmat else SMOKE_METHOD
+        if fixed_two:
+            method = method.replace('result("spanLong") = PointSpan(40, 5)', '''
+                result("spanLong") = PointSpan(40, 5)
+                result("fixedSpan") = PointSpan(60.7, 5.05)
+                result("minimumSpan") = PointSpan(10.4, 2)
+            ''')
         if one:
             method = method.replace('result("span64") = PointSpan(12, 2)', '''
                 result("centers") = CenterPositions(12)
@@ -370,10 +454,59 @@ def main():
                 Dim dowels() As Double = DowelPositions(ties)
                 result("ties") = ties
                 result("dowels") = dowels
+                result("exactOuterPitch") = OuterPitch(57.6)
+                Dim roundedShort As Boolean = False
+                Try
+                    PointSpan(31, 5)
+                Catch
+                    roundedShort = True
+                End Try
+                result("roundedShortRejected") = roundedShort
                 ValidateClearance(ties, dowels, 0.8, 0.8, 1.5)
                 Dim overlapRejected As Boolean = False
                 Try
                     ties = TiePositions(25, 2)
+                    ValidateClearance(ties, DowelPositions(ties), 0.8, 0.8, 1.5)
+                Catch
+                    overlapRejected = True
+                End Try
+                result("overlapRejected") = overlapRejected
+            ''')
+        if three:
+            method = method.replace('result("span64") = PointSpan(12, 2)', '''
+                Dim ties() As Double = TiePositions(60.7, 5.05)
+                Dim dowels() As Double = DowelPositions(ties)
+                result("ties") = ties
+                result("dowels") = dowels
+                result("reverseTies") = TiePositions(60.7, 5.05, False)
+                result("exactPitch") = MiddlePitch(51.2)
+                result("referenceStart") = ChooseAnchorAtStart(1, 50)
+                result("referenceEnd") = ChooseAnchorAtStart(50, 1)
+                result("axisAnchors") = New Boolean() {AnchorForAxis(True, 1), AnchorForAxis(True, -1),
+                    AnchorForAxis(False, 1), AnchorForAxis(False, -1)}
+                Dim ambiguousReference As Boolean = False
+                Try
+                    ChooseAnchorAtStart(5, 5)
+                Catch
+                    ambiguousReference = True
+                End Try
+                result("ambiguousReferenceRejected") = ambiguousReference
+                result("offsetOptions") = OffsetParameterNames(New String() {"CustomOffset", "CustomThickness"})
+                ValidateClearance(ties, dowels, 0.8, 0.8, 1.5)
+                Dim reverse() As Double = TiePositions(60.7, 5.05, False)
+                result("reverseDowels") = DowelPositions(reverse)
+                ValidateClearance(reverse, DowelPositions(reverse), 0.8, 0.8, 1.5)
+                Dim centralOverlap As Boolean = False
+                Try
+                    Dim shortTies() As Double = TiePositions(22.4, 2)
+                    ValidateClearance(shortTies, DowelPositions(shortTies), 0.8, 0.8, 1.5)
+                Catch
+                    centralOverlap = True
+                End Try
+                result("centralOverlapRejected") = centralOverlap
+                Dim overlapRejected As Boolean = False
+                Try
+                    ties = TiePositions(10.5, 2)
                     ValidateClearance(ties, DowelPositions(ties), 0.8, 0.8, 1.5)
                 Catch
                     overlapRejected = True
@@ -407,7 +540,7 @@ def main():
         if result.returncode == 0:
             print("VB.NET compilation OK against " + str(interop))
             if args.smoke:
-                smoke_check(output, interop, four, one, confirmat, petli)
+                smoke_check(output, interop, four, one, confirmat, petli, three=three, fixed_two=fixed_two)
         return result.returncode
     finally:
         for check in checks:

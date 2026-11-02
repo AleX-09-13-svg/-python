@@ -27,6 +27,8 @@ Partial Public Class ThisRule
         Public First As Face
         Public Second As Face
         Public Common As Edge
+        Public OrientationFace As Face
+        Public AnchorAtCommonStart As Boolean = True
         Public Owner As String
         Public Neighbor As String
         Public Sketch1 As PlanarSketch

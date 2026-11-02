@@ -11,6 +11,7 @@ Imports System.Windows.Forms
 
 Partial Public Class ThisRule
     Private Function SelectedFaces() As List(Of Face)
+        If layoutCount = 5 Then Return FiveConfirmatFaces()
         Dim result As New List(Of Face), seen As New HashSet(Of String)
         For Each entity As Object In part.SelectSet
             If Not TypeOf entity Is Face Then Throw New Exception("Выберите только плоские грани детали.")
@@ -44,6 +45,14 @@ Partial Public Class ThisRule
         Dim span As Double = PointSpan(length, edgeValue)
         Dim ux As Double = dx / length, uy As Double = dy / length, nx As Double = -uy, ny As Double = ux
         Dim cx As Double = (a.X + b.X) / 2, cy As Double = (a.Y + b.Y) / 2
+        Dim anchorAtStart As Boolean = True
+        If layoutCount = 5 Then
+            Dim nearLeft As Inventor.Point = sketch.SketchToModelSpace(P2(cx - ux * span / 2, cy - uy * span / 2))
+            Dim nearRight As Inventor.Point = sketch.SketchToModelSpace(P2(cx + ux * span / 2, cy + uy * span / 2))
+            Dim reference As Object = referenceSides(face)
+            anchorAtStart = AnchorByDistances(ReferenceDistance(reference, nearLeft), ReferenceDistance(reference, nearRight))
+        End If
+        Dim positions As Double() = PointPositions(length, edgeValue, anchorAtStart)
         Dim lines As SketchLines = sketch.SketchLines, points As SketchPoints = sketch.SketchPoints
         Dim g As GeometricConstraints = sketch.GeometricConstraints, dims As DimensionConstraints = sketch.DimensionConstraints
         Dim axis As SketchLine = ConstructionLine(lines, a, b)
@@ -54,11 +63,9 @@ Partial Public Class ThisRule
         g.AddPerpendicular(symmetry, axis)
         Dim left As SketchPoint = points.Add(P2(cx - ux * span / 2, cy - uy * span / 2), False)
         Dim right As SketchPoint = points.Add(P2(cx + ux * span / 2, cy + uy * span / 2), False)
-        Dim center As SketchPoint = points.Add(P2(cx, cy), False)
         g.AddCoincident(left, axis)
         g.AddCoincident(right, axis)
         g.AddSymmetry(left, right, symmetry)
-        g.AddMidpoint(center, axis)
         Dim control As Object = dims.AddTwoPointDistance(axis.StartSketchPoint, axis.EndSketchPoint,
             DimensionOrientationEnum.kAlignedDim, P2(cx + nx * 4, cy + ny * 4), True)
         Dim name As String = AvailableName(comp.Parameters, "Long_edge_" & index.ToString(), "parameter")
@@ -66,8 +73,28 @@ Partial Public Class ThisRule
         Dim distance As Object = dims.AddTwoPointDistance(right, left, DimensionOrientationEnum.kAlignedDim,
                                                           P2(cx + nx * 2, cy + ny * 2), False)
         distance.Parameter.Name = AvailableName(comp.Parameters, "Расстояние_между_точками", "parameter")
-        distance.Parameter.Expression = "floor((" & name & " - " & edgeOffset & " * 2) / 32 mm) * 32 mm"
-        job.Edges.Add(left) : job.Edges.Add(right) : job.Centers.Add(center)
+        job.Edges.Add(left) : job.Edges.Add(right)
+        If layoutCount = 2 Then
+            distance.Parameter.Expression = "floor((" & name & " - " & edgeOffset & " * 2) / 32 mm) * 32 mm"
+        Else
+            distance.Parameter.Expression = name & " - " & edgeOffset & " * 2"
+            Dim inner As Double = positions(3)
+            Dim leftInner As SketchPoint = points.Add(P2(cx - ux * inner, cy - uy * inner), False)
+            Dim rightInner As SketchPoint = points.Add(P2(cx + ux * inner, cy + uy * inner), False)
+            g.AddCoincident(leftInner, axis)
+            g.AddCoincident(rightInner, axis)
+            g.AddSymmetry(leftInner, rightInner, symmetry)
+            Dim spacing As Object = dims.AddTwoPointDistance(left, leftInner, DimensionOrientationEnum.kAlignedDim,
+                P2(cx - ux * span / 2 + nx * 3, cy - uy * span / 2 + ny * 3), False)
+            spacing.Parameter.Expression = "96 mm"
+            Dim center As SketchPoint = points.Add(P2(cx + ux * positions(2), cy + uy * positions(2)), False)
+            g.AddCoincident(center, axis)
+            Dim middleDistance As Object = dims.AddTwoPointDistance(If(anchorAtStart, left, right), center,
+                DimensionOrientationEnum.kAlignedDim, P2(cx + nx * 6, cy + ny * 6), False)
+            middleDistance.Parameter.Expression = "floor((" & distance.Parameter.Name & " / 2) / 32 mm) * 32 mm"
+            WriteLog("Средний конфирмат: от крайнего со стороны ориентира " & Rounded(MiddleConfirmatPitch(span) * 10) & " мм")
+            job.Edges.Add(leftInner) : job.Edges.Add(rightInner) : job.Edges.Add(center)
+        End If
     End Sub
 
     Private Function PlaneKey(face As Face) As String
@@ -88,9 +115,34 @@ Partial Public Class ThisRule
     End Function
 
     Private Function PointSpan(length As Double, offset As Double) As Double
-        Dim span As Double = Math.Floor((length - 2 * offset) / StepCm) * StepCm
-        If offset < 0 OrElse span < 2 * StepCm Then Throw New Exception("Недостаточно места: расстояние крайних точек должно быть не меньше 64 мм.")
+        If Double.IsNaN(length) OrElse Double.IsInfinity(length) OrElse
+            Double.IsNaN(offset) OrElse Double.IsInfinity(offset) OrElse offset < 0 Then
+            Throw New Exception("Отступ должен быть конечным неотрицательным числом.")
+        End If
+        Dim span As Double = length - 2 * offset
+        If layoutCount = 5 Then
+            If span - 2 * PairSpacingCm <= 0.000001 Then Throw New Exception("Недостаточно места для двух пар по 96 мм и центрального конфирмата.")
+        ElseIf layoutCount = 2 Then
+            Dim steps As Double = span / StepCm
+            If Math.Abs(steps - Math.Round(steps)) <= 0.000000000001 Then steps = Math.Round(steps)
+            span = Math.Floor(steps) * StepCm
+            If span < StepCm Then Throw New Exception("Недостаточно места для двух конфирматов с выбранным отступом и шагом 32 мм.")
+        Else
+            Throw New Exception("Неизвестная схема конфирматов.")
+        End If
         Return span
+    End Function
+
+    Private Function PointPositions(length As Double, offset As Double, Optional anchorAtStart As Boolean = True) As Double()
+        ' Для пяти центров крайние пары зеркальны, а средний округляется к выбранной стороне отсчёта.
+        Dim outer As Double = PointSpan(length, offset) / 2
+        If layoutCount = 2 Then Return New Double() {-outer, outer}
+        Dim pitch As Double = MiddleConfirmatPitch(outer * 2)
+        Dim middle As Double = If(anchorAtStart, -outer + pitch, outer - pitch)
+        If middle <= -outer + PairSpacingCm + Tol OrElse middle >= outer - PairSpacingCm - Tol Then
+            Throw New Exception("После округления к 32 мм средний конфирмат попадает в крайнюю пару. Уменьшите отступ или выберите более длинную грань.")
+        End If
+        Return New Double() {-outer, -outer + PairSpacingCm, middle, outer - PairSpacingCm, outer}
     End Function
 
     Private Function ConstructionLine(lines As SketchLines, a As Point2d, b As Point2d) As SketchLine

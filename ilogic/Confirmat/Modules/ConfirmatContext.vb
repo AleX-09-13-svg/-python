@@ -14,6 +14,9 @@ Partial Public Class ThisRule
     Private Const Prefix As String = "ConfirmatSketch"
     Private Const Tol As Double = 0.00001 ' см
     Private Const StepCm As Double = 3.2
+    Private Const PairSpacingCm As Double = 9.6
+    Private layoutCount As Integer = 5
+    Private referenceSides As New Dictionary(Of Face, Object)
     Private app As Inventor.Application
     Private part As PartDocument
     Private comp As PartComponentDefinition
@@ -28,7 +31,6 @@ Partial Public Class ThisRule
     Private Class SketchJob
         Public Sketch As PlanarSketch
         Public Edges As New List(Of SketchPoint)
-        Public Centers As New List(Of SketchPoint)
     End Class
 
     Private Function AvailableName(collection As Object, basis As String, category As String) As String

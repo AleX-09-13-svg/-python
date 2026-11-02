@@ -136,6 +136,7 @@ Partial Public Class ThisRule
         Return unique
     End Function
 
+    ' Симметрична вся пара: стяжка в −16 мм, шкант в +16 мм относительно середины.
     Private Function CenterPositions(length As Double) As Double()
         If Double.IsNaN(length) OrElse Double.IsInfinity(length) OrElse length <= StepCm + Tol Then
             Throw New Exception("Недостаточно места для центральной стяжки и шканта на расстоянии 32 мм.")

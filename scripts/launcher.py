@@ -19,19 +19,19 @@ COMMANDS = {
     },
     "stiajka5": {
         "title": "Stiajka 05",
-        "script": "05_stiajka.py",
+        "script": "05_stiajka_2inch.py",
     },
     "stiajka": {
         "title": "Stiajka 2pcs",
-        "script": "05_stiajka.py",
+        "script": "05_stiajka_2inch.py",
     },
     "confirmat2": {
         "title": "Confirmat",
-        "script": "02_confirmat.py",
+        "script": "02_confirmat_5inch.py",
     },
     "confirmat2_bok16": {
         "title": "Confirmat",
-        "script": "02_confirmat.py",
+        "script": "02_confirmat_5inch.py",
     },
 }
 

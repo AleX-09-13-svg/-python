@@ -11,7 +11,7 @@ from stiajka.stiajka import create_hole_batch, create_stiajka_features
 from stiajka.offset_sketch import create_offset_drilling_sketch
 
 
-workflow = importlib.import_module("05_stiajka")
+workflow = importlib.import_module("05_stiajka_2inch")
 
 
 class StiajkaTests(unittest.TestCase):

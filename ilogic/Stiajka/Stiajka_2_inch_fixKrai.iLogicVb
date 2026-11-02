@@ -1,8 +1,13 @@
-﻿' Внешнее правило iLogic: присадка 05 непосредственно внутри Inventor 2023.
-' Четыре стяжки с равным шагом без округления и четыре шканта.
-' Основа: Stiajka_2_inch.iLogicVb и 05_stiajka.py. Python не запускается.
+' ДВЕ СТЯЖКИ, ТОЧНЫЕ КРАЙНИЕ ОТСТУПЫ. Обычное внешнее правило для .ipt.
+' Выберите узкую грань и смежную пласть одного тела; порядок не важен. Для нескольких тел — по две грани.
+' Требуется одно общее прямое ребро. В окне — пользовательский параметр ТОЧНОГО отступа до центра стяжки.
+' Между стяжками: длина ребра − 2 × отступ, без округления к 32 мм; минимум 64 мм.
+' Шканты — на 32 мм внутрь от стяжек; при пролёте 64 мм это один общий центральный шкант.
+' На пласти — две соответствующие чашки. Остальные размеры берутся из параметров детали.
+' Журнал: stiajka_2_fixKrai_ilogic.log в ProjectRoot. Modules отдельно не запускать.
 AddReference "System.Drawing.dll"
 AddReference "System.Windows.Forms.dll"
+AddReference "Autodesk.Inventor.Interop.dll"
 Imports Inventor
 Imports System.Collections.Generic
 Imports System.Diagnostics
@@ -17,27 +22,27 @@ AddVbFile "Modules\StiajkaConfig.vb"
 AddVbFile "Modules\StiajkaSelection.vb"
 AddVbFile "Modules\StiajkaSketches.vb"
 AddVbFile "Modules\StiajkaHoles.vb"
-AddVbFile "Modules\StiajkaDialog.vb"
-AddVbFile "Modules\Stiajka_4_Layout.vb"
+AddVbFile "Modules\Stiajka_2_fixKrai_Dialog.vb"
+AddVbFile "Modules\Stiajka_2_fixKrai_Layout.vb"
 
 Public Class ThisRule
-    Private Const Prefix As String = "DrillingSketch_4pcs"
-    Private Const TieCount As Integer = 4
-    Private Const OffsetDialogTitle As String = "Четыре стяжки — параметр отступа"
-    Private Const OffsetDialogLabel As String = "Параметр отступа крайних стяжек от кромок:"
+    Private Const Prefix As String = "DrillingSketch_2_fixKrai"
+    Private Const FixedEdgeLayout As Boolean = True
+    Private Const OffsetDialogTitle As String = "Две стяжки — фиксированный отступ от краёв"
+    Private Const OffsetDialogLabel As String = "Пользовательский параметр точного отступа от края до центра стяжки:"
 
     Public Sub Main()
         app = ThisApplication
         bodies.Clear()
         reserved.Clear()
-        Dim logPath As String = System.IO.Path.Combine(ProjectRoot, "stiajka_4_ilogic.log")
+        Dim logPath As String = System.IO.Path.Combine(ProjectRoot, "stiajka_2_fixKrai_ilogic.log")
         Dim transaction As Inventor.Transaction = Nothing
         Dim previousScreen As Boolean = app.ScreenUpdating
         Dim total As Stopwatch = Nothing
         Using writer As New StreamWriter(logPath, False, New UTF8Encoding(False))
             log = writer
             Try
-                WriteLog("Стяжка 4 шт. iLogic Native. " & DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"))
+                WriteLog("05 iLogic Native. " & DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"))
                 If app.ActiveDocument Is Nothing OrElse app.ActiveDocument.DocumentType <> DocumentTypeEnum.kPartDocumentObject Then
                     Throw New Exception("Откройте деталь .ipt и выберите по две грани каждого тела.")
                 End If
@@ -55,6 +60,7 @@ Public Class ThisRule
                     Return
                 End If
                 phase.Restart()
+                Dim edgeUser As UserParameter = comp.Parameters.UserParameters.Item(edgeParam)
                 Dim offsetParam As String = SettingParameter("offset", "Стяжка_отступ")
                 Dim required As List(Of String) = RequiredParameters(edgeParam)
                 For Each name As String In required
@@ -65,15 +71,14 @@ Public Class ThisRule
                     End Try
                 Next
                 Dim offsetValue As Double = CDbl(comp.Parameters.Item(offsetParam).Value)
-                Dim edgeValue As Double = CDbl(comp.Parameters.Item(edgeParam).Value)
+                Dim edgeValue As Double = CDbl(edgeUser.Value)
                 If offsetValue <= 0 OrElse edgeValue < 0 Then Throw New Exception("Проверьте положительный отступ стяжки и отступ от кромки.")
                 For Each job As PairJob In jobs
-                    Dim length As Double = job.Common.StartVertex.Point.DistanceTo(job.Common.StopVertex.Point)
-                    ValidateLayout(length, edgeValue)
-                    WriteLog("Четыре стяжки: шаг " & Rounded(PointSpan(length, edgeValue) * 10 / 3) & " мм")
+                    Dim span As Double = PointSpan(job.Common.StartVertex.Point.DistanceTo(job.Common.StopVertex.Point), edgeValue)
+                    WriteLog("Точный отступ: " & Rounded(edgeValue * 10) & " мм; между стяжками: " & Rounded(span * 10) & " мм")
                 Next
                 LogStage("Проверка параметров и чтение значений", phase)
-                transaction = app.TransactionManager.StartTransaction(part, "Четыре стяжки — iLogic Native")
+                transaction = app.TransactionManager.StartTransaction(part, "05 Стяжка — iLogic Native")
                 EnsureKeep(required)
                 LogStage("Подготовка Keep_Excel_Params", phase)
                 total = Stopwatch.StartNew()
@@ -96,8 +101,8 @@ Public Class ThisRule
                 WriteLog("05: Общее время построения: " & Seconds(total) & "s")
                 WriteLog("05: Готово. Пар граней: " & jobs.Count.ToString())
                 log.Flush()
-                ' MessageBox.Show("Присадка для четырёх стяжек создана." & vbCrLf & "Время построения: " & Seconds(total) & " с" &
-                                ' vbCrLf & "Журнал: " & logPath, "Четыре стяжки — iLogic Native")
+                ' MessageBox.Show("Присадка создана." & vbCrLf & "Время построения: " & Seconds(total) & " с" &
+                                ' vbCrLf & "Журнал: " & logPath, "05 — iLogic Native")
             Catch ex As Exception
                 WriteLog("ОШИБКА: " & ex.ToString())
                 If transaction IsNot Nothing Then
@@ -110,7 +115,7 @@ Public Class ThisRule
                 End If
                 log.Flush()
                 app.ScreenUpdating = previousScreen
-                MessageBox.Show(ex.Message & vbCrLf & "Подробности: " & logPath, "Четыре стяжки — ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                MessageBox.Show(ex.Message & vbCrLf & "Подробности: " & logPath, "05 — ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error)
             Finally
                 app.ScreenUpdating = previousScreen
             End Try

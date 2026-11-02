@@ -12,15 +12,19 @@ from confirmat.runtime import ConfirmatRuntime
 
 class ConfirmatOptimizedTests(unittest.TestCase):
     def test_launcher_passes_created_points_and_updates_only_after_holes(self):
-        spec = importlib.util.spec_from_file_location("confirmat_launcher", Path(__file__).resolve().parents[1] / "02_confirmat.py")
+        spec = importlib.util.spec_from_file_location("confirmat_launcher", Path(__file__).resolve().parents[1] / "02_confirmat_5inch.py")
         launcher = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(launcher)
         inventor = MagicMock()
+        inventor.parameter_value.return_value = 5.0
         sketch = object()
-        job = dict(sketch=sketch, outer_points=[object(), object()], center_point=object())
+        job = dict(sketch=sketch, outer_points=[object(), object()], inner_points=[object(), object()], center_point=object())
 
         def build(*args, **kwargs):
             self.assertFalse(kwargs["compact_points"])
+            self.assertIs(kwargs["point_builder"].func, launcher.create_pair_points)
+            self.assertEqual(kwargs["point_builder"].keywords, {"edge_offset_param": "offset"})
+            self.assertEqual(kwargs["edge_offset_value"], 5.0)
             kwargs["point_jobs"].append(job)
             return [sketch]
 
@@ -32,14 +36,14 @@ class ConfirmatOptimizedTests(unittest.TestCase):
 
         with patch.object(launcher, "selected_inventor_context", return_value=(inventor, [object()])), patch.object(
             launcher, "ConfirmatRuntime", return_value=inventor
-        ), patch.object(launcher, "choose_workflow_parameters", return_value=("thickness", "offset", "count")), patch.object(
+        ), patch.object(launcher, "choose_workflow_parameters", return_value=("thickness", "offset")), patch.object(
             launcher, "use_material_thickness"
         ), patch.object(launcher, "confirmat_parameter_names", return_value=()), patch.object(
-            launcher, "resolve_confirmat_count", return_value="2"
-        ), patch.object(launcher, "ensure_unitless_keep_parameter"), patch.object(launcher, "DrillingNames"), patch.object(
+            launcher, "DrillingNames"
+        ), patch.object(
             launcher.create_sketches, "ensure_parameters", return_value=True
         ), patch.object(launcher.create_sketches, "create_sketches_for_faces", side_effect=build), patch.object(
-            launcher.confirmat_module, "create_confirmat_edges_and_center_features", side_effect=holes_created
+            launcher.confirmat_module, "create_confirmat_pair_features", side_effect=holes_created
         ):
             launcher.main()
         inventor.update.assert_called_once_with()
