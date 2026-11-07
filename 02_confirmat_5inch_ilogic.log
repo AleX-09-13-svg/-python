@@ -1,8 +1,5 @@
-02 Конфирмат Native — 5 шт. 2026-11-02 21:10:26
-Настройки: встроенные в правило iLogic; размеры из параметров детали.
-  Оформление пропущено (Цвет эскиза): Неопознанная ошибка (Исключение из HRESULT: 0x80004005 (E_FAIL))
-Все эскизы: 0.220s
-Confirmat 5pcs counterbore; центров: 5; операций: 1
-Все отверстия: 0.079s
-Обновление документа: 0.003s
-Общее время построения: 0.311s
+02 Конфирмат Native — 5 шт. 2026-11-07 00:22:34
+ОШИБКА: System.Exception: Выберите грани и ориентиры парами: грань присадки, затем торцевая кромка или грань со стороны отсчёта.
+   в ThisRule.FiveConfirmatFaces() в C:\Users\desig\AppData\Local\Temp\iLogic Rules\ConfirmatReference.vb:строка 14
+   в ThisRule.SelectedFaces() в C:\Users\desig\AppData\Local\Temp\iLogic Rules\ConfirmatSketches.vb:строка 14
+   в ThisRule.RunConfirmat(Int32 count, Boolean useEdgeSelection) в C:\Users\desig\AppData\Local\Temp\iLogic Rules\ConfirmatWorkflow.vb:строка 37

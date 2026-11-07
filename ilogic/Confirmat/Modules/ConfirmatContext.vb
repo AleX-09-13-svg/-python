@@ -16,7 +16,9 @@ Partial Public Class ThisRule
     Private Const StepCm As Double = 3.2
     Private Const PairSpacingCm As Double = 9.6
     Private layoutCount As Integer = 5
+    Private edgeSelectionMode As Boolean = False
     Private referenceSides As New Dictionary(Of Face, Object)
+    Private referenceQueues As New Dictionary(Of Face, Queue(Of Object))
     Private app As Inventor.Application
     Private part As PartDocument
     Private comp As PartComponentDefinition

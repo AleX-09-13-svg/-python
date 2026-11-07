@@ -11,7 +11,8 @@ Imports System.Windows.Forms
 
 Partial Public Class ThisRule
     Private Function SelectedFaces() As List(Of Face)
-        If layoutCount = 5 Then Return FiveConfirmatFaces()
+        If layoutCount = 5 OrElse layoutCount = 3 Then Return FiveConfirmatFaces()
+        If layoutCount = 4 AndAlso edgeSelectionMode Then Return EdgeSelectedFaces()
         Dim result As New List(Of Face), seen As New HashSet(Of String)
         For Each entity As Object In part.SelectSet
             If Not TypeOf entity Is Face Then Throw New Exception("Выберите только плоские грани детали.")
@@ -22,6 +23,48 @@ Partial Public Class ThisRule
         Next
         If result.Count = 0 Then Throw New Exception("Выберите грани для присадки перед запуском правила.")
         Return result
+    End Function
+
+    Private Function EdgeSelectedFaces() As List(Of Face)
+        Dim result As New List(Of Face), seen As New HashSet(Of String)
+        If part.SelectSet.Count = 0 Then Throw New Exception("Выберите одну или несколько прямых кромок.")
+        For Each entity As Object In part.SelectSet
+            Dim edge As Edge = TryCast(entity, Edge)
+            If edge Is Nothing AndAlso TypeOf entity Is EdgeProxy Then
+                edge = DirectCast(entity, EdgeProxy).NativeObject
+            End If
+            If edge Is Nothing Then
+                Dim selectedType As String = If(entity Is Nothing, "Nothing", entity.GetType().FullName)
+                Throw New Exception("Выберите только прямые кромки. Тип выбранного объекта: " & selectedType)
+            End If
+            If CInt(edge.GeometryType) <> 5122 AndAlso CInt(edge.GeometryType) <> 5123 Then Throw New Exception("Выберите прямую кромку.")
+            Dim support As Face = SupportFace(edge)
+            If layoutCount = 4 Then
+                If Not referenceQueues.ContainsKey(support) Then referenceQueues(support) = New Queue(Of Object)
+                referenceQueues(support).Enqueue(edge)
+            End If
+            referenceSides(support) = edge
+            Dim key As String = PlaneKey(support)
+            If layoutCount = 4 OrElse seen.Add(key) Then result.Add(support)
+        Next
+        Return result
+    End Function
+
+    Private Function SupportFace(selectedEdge As Edge) As Face
+        Dim best As Face = Nothing, bestPerimeter As Double = -1
+        For Each body As SurfaceBody In comp.SurfaceBodies
+            For Each face As Face In body.Faces
+                If Not TypeOf face.Geometry Is Plane Then Continue For
+                Dim containsEdge As Boolean = False, perimeter As Double = 0
+                For Each edge As Edge In face.Edges
+                    perimeter += edge.StartVertex.Point.DistanceTo(edge.StopVertex.Point)
+                    If edge.TransientKey = selectedEdge.TransientKey Then containsEdge = True
+                Next
+                If containsEdge AndAlso perimeter > bestPerimeter Then best = face : bestPerimeter = perimeter
+            Next
+        Next
+        If best Is Nothing Then Throw New Exception("Не удалось найти плоскую грань, смежную с выбранной кромкой.")
+        Return best
     End Function
 
     Private Sub BuildFace(job As SketchJob, face As Face, edgeOffset As String, edgeValue As Double, index As Integer)
@@ -46,10 +89,13 @@ Partial Public Class ThisRule
         Dim ux As Double = dx / length, uy As Double = dy / length, nx As Double = -uy, ny As Double = ux
         Dim cx As Double = (a.X + b.X) / 2, cy As Double = (a.Y + b.Y) / 2
         Dim anchorAtStart As Boolean = True
-        If layoutCount = 5 Then
+        If layoutCount = 5 OrElse layoutCount = 3 OrElse (layoutCount = 4 AndAlso edgeSelectionMode) Then
             Dim nearLeft As Inventor.Point = sketch.SketchToModelSpace(P2(cx - ux * span / 2, cy - uy * span / 2))
             Dim nearRight As Inventor.Point = sketch.SketchToModelSpace(P2(cx + ux * span / 2, cy + uy * span / 2))
             Dim reference As Object = referenceSides(face)
+            If layoutCount = 4 AndAlso referenceQueues.ContainsKey(face) AndAlso referenceQueues(face).Count > 0 Then
+                reference = referenceQueues(face).Dequeue()
+            End If
             anchorAtStart = AnchorByDistances(ReferenceDistance(reference, nearLeft), ReferenceDistance(reference, nearRight))
         End If
         Dim positions As Double() = PointPositions(length, edgeValue, anchorAtStart)
@@ -73,10 +119,41 @@ Partial Public Class ThisRule
         Dim distance As Object = dims.AddTwoPointDistance(right, left, DimensionOrientationEnum.kAlignedDim,
                                                           P2(cx + nx * 2, cy + ny * 2), False)
         distance.Parameter.Name = AvailableName(comp.Parameters, "Расстояние_между_точками", "parameter")
-        job.Edges.Add(left) : job.Edges.Add(right)
-        If layoutCount = 2 Then
+        If layoutCount = 1 Then
+            distance.Parameter.Expression = name
+            Dim center As SketchPoint = points.Add(P2(cx, cy), False)
+            g.AddMidpoint(center, axis)
+            job.Edges.Add(center)
+        ElseIf layoutCount = 2 Then
+            job.Edges.Add(left) : job.Edges.Add(right)
             distance.Parameter.Expression = "floor((" & name & " - " & edgeOffset & " * 2) / 32 mm) * 32 mm"
+        ElseIf layoutCount = 3 Then
+            job.Edges.Add(left) : job.Edges.Add(right)
+            distance.Parameter.Expression = name & " - " & edgeOffset & " * 2"
+            Dim middle As Double = If(anchorAtStart, -span / 2 + PairSpacingCm, span / 2 - PairSpacingCm)
+            Dim center As SketchPoint = points.Add(P2(cx + ux * middle, cy + uy * middle), False)
+            g.AddCoincident(center, axis)
+            Dim middleDistance As Object = dims.AddTwoPointDistance(If(anchorAtStart, left, right), center,
+                DimensionOrientationEnum.kAlignedDim, P2(cx + nx * 6, cy + ny * 6), False)
+            middleDistance.Parameter.Expression = "96 mm"
+            job.Edges.Add(center)
+        ElseIf layoutCount = 4 Then
+            job.Edges.Add(left) : job.Edges.Add(right)
+            distance.Parameter.Expression = name & " - " & edgeOffset & " * 2"
+            Dim inner As Double = span / 2 - PairSpacingCm
+            Dim leftInner As SketchPoint = points.Add(P2(cx - ux * inner, cy - uy * inner), False)
+            Dim rightInner As SketchPoint = points.Add(P2(cx + ux * inner, cy + uy * inner), False)
+            g.AddCoincident(leftInner, axis)
+            g.AddCoincident(rightInner, axis)
+            Dim firstSpacing As Object = dims.AddTwoPointDistance(left, leftInner, DimensionOrientationEnum.kAlignedDim,
+                P2(cx - ux * span / 2 + nx * 3, cy - uy * span / 2 + ny * 3), False)
+            firstSpacing.Parameter.Expression = "96 mm"
+            Dim lastSpacing As Object = dims.AddTwoPointDistance(right, rightInner, DimensionOrientationEnum.kAlignedDim,
+                P2(cx + ux * span / 2 + nx * 3, cy + uy * span / 2 + ny * 3), False)
+            lastSpacing.Parameter.Expression = "96 mm"
+            job.Edges.Add(leftInner) : job.Edges.Add(rightInner)
         Else
+            job.Edges.Add(left) : job.Edges.Add(right)
             distance.Parameter.Expression = name & " - " & edgeOffset & " * 2"
             Dim inner As Double = positions(3)
             Dim leftInner As SketchPoint = points.Add(P2(cx - ux * inner, cy - uy * inner), False)
@@ -120,8 +197,15 @@ Partial Public Class ThisRule
             Throw New Exception("Отступ должен быть конечным неотрицательным числом.")
         End If
         Dim span As Double = length - 2 * offset
-        If layoutCount = 5 Then
+        If layoutCount = 1 Then
+            If length <= 0.000001 Then Throw New Exception("Недостаточная длина оси для центрального конфирмата.")
+            Return length
+        ElseIf layoutCount = 5 Then
             If span - 2 * PairSpacingCm <= 0.000001 Then Throw New Exception("Недостаточно места для двух пар по 96 мм и центрального конфирмата.")
+        ElseIf layoutCount = 4 Then
+            If span <= 2 * PairSpacingCm + 0.000001 Then Throw New Exception("Недостаточно места для четырёх конфирматов с шагом 96 мм от крайних.")
+        ElseIf layoutCount = 3 Then
+            If span <= PairSpacingCm + 0.000001 Then Throw New Exception("Недостаточно места для трёх конфирматов: центральный должен быть на 96 мм от крайнего.")
         ElseIf layoutCount = 2 Then
             Dim steps As Double = span / StepCm
             If Math.Abs(steps - Math.Round(steps)) <= 0.000000000001 Then steps = Math.Round(steps)
@@ -136,7 +220,10 @@ Partial Public Class ThisRule
     Private Function PointPositions(length As Double, offset As Double, Optional anchorAtStart As Boolean = True) As Double()
         ' Для пяти центров крайние пары зеркальны, а средний округляется к выбранной стороне отсчёта.
         Dim outer As Double = PointSpan(length, offset) / 2
+        If layoutCount = 1 Then Return New Double() {0}
         If layoutCount = 2 Then Return New Double() {-outer, outer}
+        If layoutCount = 3 Then Return New Double() {-outer, If(anchorAtStart, -outer + PairSpacingCm, outer - PairSpacingCm), outer}
+        If layoutCount = 4 Then Return New Double() {-outer, -outer + PairSpacingCm, outer - PairSpacingCm, outer}
         Dim pitch As Double = MiddleConfirmatPitch(outer * 2)
         Dim middle As Double = If(anchorAtStart, -outer + pitch, outer - pitch)
         If middle <= -outer + PairSpacingCm + Tol OrElse middle >= outer - PairSpacingCm - Tol Then

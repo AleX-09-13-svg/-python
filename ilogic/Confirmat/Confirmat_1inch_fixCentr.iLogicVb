@@ -1,0 +1,31 @@
+' One confirmat at the center of each selected planar face.
+' Only the material thickness parameter is requested; no edge offset is used.
+' Modules are included with AddVbFile and must not be run separately.
+' Log: 02_confirmat_1inch_ilogic.log in project root.
+AddReference "System.Drawing.dll"
+AddReference "System.Windows.Forms.dll"
+AddReference "Autodesk.Inventor.Interop.dll"
+Imports Inventor
+Imports System.Collections.Generic
+Imports System.Diagnostics
+Imports System.Globalization
+Imports System.IO
+Imports System.Text
+Imports System.Text.RegularExpressions
+Imports System.Windows.Forms
+
+AddVbFile "Modules\ConfirmatContext.vb"
+AddVbFile "Modules\ConfirmatConfig.vb"
+AddVbFile "Modules\ConfirmatDialog.vb"
+AddVbFile "Modules\ConfirmatSketches.vb"
+AddVbFile "Modules\ConfirmatReference.vb"
+AddVbFile "Modules\ConfirmatHoles.vb"
+
+AddVbFile "Modules\ConfirmatWorkflow.vb"
+
+Public Class ThisRule
+    Public Sub Main()
+        app = ThisApplication
+        RunConfirmat(1)
+    End Sub
+End Class

@@ -38,7 +38,8 @@ Partial Public Class ThisRule
                 .Padding = New Padding(16), .Margin = New Padding(0)}
             fields.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100.0F))
             dialog.Controls.Add(fields)
-            For i As Integer = 0 To 1
+            Dim fieldCount As Integer = If(layoutCount = 1, 1, 2)
+            For i As Integer = 0 To fieldCount - 1
                 fields.RowStyles.Add(New RowStyle(SizeType.AutoSize))
                 fields.RowStyles.Add(New RowStyle(SizeType.AutoSize))
                 Dim label As New Label With {.AutoSize = True, .Text = labels(i),
@@ -51,11 +52,15 @@ Partial Public Class ThisRule
             Next
             fields.RowStyles.Add(New RowStyle(SizeType.AutoSize))
             fields.Controls.Add(New Label With {.AutoSize = True, .Margin = New Padding(0, 0, 0, 12),
-                .Text = If(layoutCount = 2,
+                .Text = If(layoutCount = 1,
+                    "Один конфирмат в центре оси.",
+                    If(layoutCount = 2,
                     "Два центра симметрично. Расстояние кратно 32 мм; отступ не меньше выбранного.",
-                    "Две пары по 96 мм; средний — по сетке 32 мм от стороны выбранной кромки.")}, 0, 4)
+                    If(layoutCount = 4,
+                       "Четыре центра: расстояния 1–2 и 4–3 по 96 мм; крайние отступы фиксированные.",
+                       "Две пары по 96 мм; средний — по сетке 32 мм от стороны выбранной кромки.")))}, 0, 4)
             Dim populate As Action = Sub()
-                For i As Integer = 0 To 1
+                For i As Integer = 0 To combos.Count - 1
                     Dim current As String = combos(i).Text
                     combos(i).Items.Clear()
                     For Each name As String In names

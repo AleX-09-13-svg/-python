@@ -10,12 +10,17 @@ Imports System.Text.RegularExpressions
 Imports System.Windows.Forms
 
 Partial Public Class ThisRule
-    Private Sub RunConfirmat(count As Integer)
+    Private Sub RunConfirmat(count As Integer, Optional useEdgeSelection As Boolean = False)
         layoutCount = count
+        edgeSelectionMode = useEdgeSelection
         app = ThisApplication
         reserved.Clear()
         referenceSides.Clear()
-        Dim logPath As String = System.IO.Path.Combine(ProjectRoot, "02_confirmat_" & count.ToString() & "inch_ilogic.log")
+        referenceQueues.Clear()
+        Dim logName As String = If(count = 4 AndAlso Not useEdgeSelection,
+                                  "02_confirmat_4inch_fixCentr_ilogic.log",
+                                  "02_confirmat_" & count.ToString() & "inch_ilogic.log")
+        Dim logPath As String = System.IO.Path.Combine(ProjectRoot, logName)
         Dim transaction As Inventor.Transaction = Nothing
         Dim previousScreen As Boolean = app.ScreenUpdating
         Using writer As New StreamWriter(logPath, False, New UTF8Encoding(False))
@@ -33,13 +38,14 @@ Partial Public Class ThisRule
                 LoadConfig()
                 Dim chosen() As String = ChooseParameters()
                 If chosen Is Nothing Then Return
-                Dim thickness As String = chosen(0), edgeOffset As String = chosen(1)
+                Dim thickness As String = chosen(0), edgeOffset As String = If(count = 1, "", chosen(1))
                 ' Выбранные имена должны принадлежать пользовательской коллекции.
                 Dim thicknessUser As UserParameter = comp.Parameters.UserParameters.Item(thickness)
-                Dim offsetUser As UserParameter = comp.Parameters.UserParameters.Item(edgeOffset)
+                Dim offsetUser As UserParameter = Nothing
+                If count <> 1 Then offsetUser = comp.Parameters.UserParameters.Item(edgeOffset)
                 If CDbl(comp.Parameters.Item(thickness).Value) <= 0 Then Throw New Exception("Толщина должна быть положительной.")
-                Dim edgeValue As Double = CDbl(comp.Parameters.Item(edgeOffset).Value)
-                If edgeValue < 0 Then Throw New Exception("Отступ от кромки не должен быть отрицательным.")
+                Dim edgeValue As Double = If(count = 1, 0.0, CDbl(comp.Parameters.Item(edgeOffset).Value))
+                If count <> 1 AndAlso edgeValue < 0 Then Throw New Exception("Отступ от кромки не должен быть отрицательным.")
                 ' Как в 02: глубина широкого участка равна выбранной толщине.
                 For Each key As String In New String() {"outer_2pcs"}
                     Dim values As Dictionary(Of String, Object) = Block(st, key)
@@ -52,8 +58,10 @@ Partial Public Class ThisRule
                     Dim parameter As Inventor.Parameter = comp.Parameters.Item(name)
                 Next
                 Dim groups As New Dictionary(Of String, List(Of Face))
+                Dim rowIndex As Integer = 0
                 For Each face As Face In faces
-                    Dim key As String = PlaneKey(face)
+                    rowIndex += 1
+                    Dim key As String = If(layoutCount = 4 AndAlso edgeSelectionMode, "edge-row-" & rowIndex.ToString(), PlaneKey(face))
                     If Not groups.ContainsKey(key) Then groups(key) = New List(Of Face)
                     groups(key).Add(face)
                 Next

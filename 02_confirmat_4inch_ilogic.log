@@ -1,0 +1,5 @@
+02 Конфирмат Native — 4 шт. 2026-11-06 22:15:55
+ОШИБКА: System.Exception: Выберите только прямые кромки. Тип выбранного объекта: System.__ComObject
+   в ThisRule.EdgeSelectedFaces() в C:\Users\desig\AppData\Local\Temp\iLogic Rules\ConfirmatSketches.vb:строка 39
+   в ThisRule.SelectedFaces() в C:\Users\desig\AppData\Local\Temp\iLogic Rules\ConfirmatSketches.vb:строка 15
+   в ThisRule.RunConfirmat(Int32 count, Boolean useEdgeSelection) в C:\Users\desig\AppData\Local\Temp\iLogic Rules\ConfirmatWorkflow.vb:строка 37

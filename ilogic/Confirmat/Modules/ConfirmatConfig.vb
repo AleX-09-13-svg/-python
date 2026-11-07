@@ -11,7 +11,8 @@ Imports System.Windows.Forms
 
 Partial Public Class ThisRule
     Private Function RequiredParameters(thickness As String, edgeOffset As String) As List(Of String)
-        Dim result As New List(Of String) From {thickness, edgeOffset}
+        Dim result As New List(Of String) From {thickness}
+        If edgeOffset <> "" Then result.Add(edgeOffset)
         For Each key As String In New String() {"outer_2pcs", "inner_2pcs"}
             For Each field As String In New String() {"diameter", "depth"}
                 Dim expression As String = Text(Block(st, key), field, "")

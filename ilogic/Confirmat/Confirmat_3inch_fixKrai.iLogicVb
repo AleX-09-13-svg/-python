@@ -1,0 +1,34 @@
+﻿' РџРЇРўР¬ РљРћРќР¤РР РњРђРўРћР’, РўРћР§РќР«Р• РљР РђР™РќРР• РћРўРЎРўРЈРџР«. РћР±С‹С‡РЅРѕРµ РІРЅРµС€РЅРµРµ РїСЂР°РІРёР»Рѕ РґР»СЏ .ipt.
+' Выбирайте грани парами: грань присадки, затем кромка-ориентир со стороны первого крайнего конфирмата.
+' В параметрах задаются толщина и точный отступ от каждого края до крайнего центра.
+' Третий, центральный конфирмат расположен на 96 мм от крайнего центра со стороны ориентира.
+' Ориентиром служит вторая выбранная кромка или торцевая грань; на ней отверстие не создаётся.
+' Модули подключаются через AddVbFile и отдельно не запускаются.
+' Журнал: 02_confirmat_3inch_ilogic.log в корне проекта.
+AddReference "System.Drawing.dll"
+AddReference "System.Windows.Forms.dll"
+AddReference "Autodesk.Inventor.Interop.dll"
+Imports Inventor
+Imports System.Collections.Generic
+Imports System.Diagnostics
+Imports System.Globalization
+Imports System.IO
+Imports System.Text
+Imports System.Text.RegularExpressions
+Imports System.Windows.Forms
+
+AddVbFile "Modules\ConfirmatContext.vb"
+AddVbFile "Modules\ConfirmatConfig.vb"
+AddVbFile "Modules\ConfirmatDialog.vb"
+AddVbFile "Modules\ConfirmatSketches.vb"
+AddVbFile "Modules\ConfirmatReference.vb"
+AddVbFile "Modules\ConfirmatHoles.vb"
+
+AddVbFile "Modules\ConfirmatWorkflow.vb"
+
+Public Class ThisRule
+    Public Sub Main()
+        app = ThisApplication
+        RunConfirmat(3)
+    End Sub
+End Class
