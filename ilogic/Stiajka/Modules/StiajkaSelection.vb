@@ -75,62 +75,53 @@ Partial Public Class ThisRule
             samples.Add(job.Sketch1.SketchToModelSpace(p.Geometry))
         Next
         WriteLog("Поиск соседа для '" & job.Owner & "'; центров: " & samples.Count.ToString() &
-                 "; допуск: " & Rounded(Tol * 10) & " мм; скрытые тела включены.")
+                 "; допуск проверки грани: 0.01 мм; скрытые тела включены.")
         Dim sourcePlane As Plane = DirectCast(job.First.Geometry, Plane)
         WriteLog("  Плоскость торца: точка " & PointForLog(sourcePlane.RootPoint) &
                  "; нормаль: " & Rounded(sourcePlane.Normal.X) & "; " &
                  Rounded(sourcePlane.Normal.Y) & "; " & Rounded(sourcePlane.Normal.Z))
-        Dim sampleIndex As Integer = 0
         Dim found As New HashSet(Of String)
-        Dim filters() As SelectionFilterEnum = {SelectionFilterEnum.kPartFaceFilter}
-        For Each sample As Inventor.Point In samples
-            sampleIndex += 1
-            WriteLog("  Центр " & sampleIndex.ToString() & ": " & PointForLog(sample))
-            Dim entities As ObjectsEnumerator = Nothing
-            Try
-                entities = comp.FindUsingPoint(sample, filters, Tol, False)
-            Catch ex As System.Runtime.InteropServices.COMException
-                WriteLog("Поиск по точке: " & ex.Message)
-                Continue For
-            End Try
-            If entities Is Nothing Then
-                WriteLog("    Поиск не вернул коллекцию граней.")
+        Dim neighborTolerance As Double = 0.001 ' см = 0.01 мм
+        For Each body As SurfaceBody In comp.SurfaceBodies
+            Dim name As String = body.Name
+            If name = job.Owner OrElse found.Contains(name) Then Continue For
+            If Not body.IsSolid Then
+                WriteLog("  Отклонено '" & name & "': тело не твердотельное.")
                 Continue For
             End If
-            WriteLog("    Найдено объектов: " & entities.Count.ToString())
-            For Each entity As Object In entities
-                If Not TypeOf entity Is Face Then Continue For
-                Dim face As Face = DirectCast(entity, Face)
-                Dim body As SurfaceBody = face.SurfaceBody
-                Dim name As String = body.Name
-                If name = job.Owner Then
-                    WriteLog("    Грань исходного тела: " & name)
-                    Continue For
-                End If
-                If found.Contains(name) Then Continue For
-                If Not body.IsSolid Then
-                    WriteLog("    Отклонено '" & name & "': тело не твердотельное.")
-                    Continue For
-                End If
-                If Not SamePlane(job.First, face) Then
-                    WriteLog("    Отклонено '" & name & "': плоскость грани не совпадает с торцом.")
-                    Continue For
-                End If
+            Dim faceIndex As Integer = 0
+            For Each face As Face In body.Faces
+                faceIndex += 1
+                If Not TypeOf face.Geometry Is Plane Then Continue For
+                If Not SamePlaneWithin(job.First, face, neighborTolerance) Then Continue For
                 Dim contains As Boolean = True
-                Dim centerIndex As Integer = 0
+                Dim sampleIndex As Integer = 0
                 For Each p As Inventor.Point In samples
-                    centerIndex += 1
-                    Dim distance As Double = face.GetClosestPointTo(p).DistanceTo(p)
-                    If distance > Tol Then
-                        WriteLog("    Отклонено '" & name & "': центр " & centerIndex.ToString() &
-                                 " вне грани; расстояние: " & Rounded(distance * 10) & " мм.")
+                    sampleIndex += 1
+                    Dim distance As Double
+                    Try
+                        distance = face.GetClosestPointTo(p).DistanceTo(p)
+                    Catch ex As System.Runtime.InteropServices.COMException
+                        WriteLog("  Проверка грани " & faceIndex.ToString() & " тела '" & name &
+                                 "' не выполнена: " & ex.Message)
+                        contains = False
+                        Exit For
+                    End Try
+                    If distance > neighborTolerance Then
+                        WriteLog("  Грань " & faceIndex.ToString() & " тела '" & name &
+                                 "' не покрывает центр " & sampleIndex.ToString() &
+                                 "; расстояние: " & Rounded(distance * 10) & " мм.")
                         contains = False
                         Exit For
                     End If
                 Next
-                If contains Then found.Add(name) : bodies(name) = body
+                If contains Then
+                    found.Add(name)
+                    bodies(name) = body
+                    WriteLog("  Найдена совпадающая грань тела '" & name & "'.")
+                    Exit For
+                End If
             Next
-            If found.Count > 0 Then Exit For
         Next
         If found.Count <> 1 Then Throw New Exception("Тело '" & job.Owner & "': требуется один сосед с совпадающей гранью. Найдено: " & found.Count.ToString())
         Dim result As String = Nothing
@@ -176,14 +167,14 @@ Partial Public Class ThisRule
                Math.Round(distance, 3).ToString("F3", CultureInfo.InvariantCulture)
     End Function
 
-    Private Function SamePlane(a As Face, b As Face) As Boolean
+    Private Function SamePlaneWithin(a As Face, b As Face, tolerance As Double) As Boolean
         Dim p As Plane = TryCast(a.Geometry, Plane), q As Plane = TryCast(b.Geometry, Plane)
         If p Is Nothing OrElse q Is Nothing Then Return False
         Dim n As UnitVector = p.Normal, m As UnitVector = q.Normal
         Dim dot As Double = n.X * m.X + n.Y * m.Y + n.Z * m.Z
         Dim x As Inventor.Point = p.RootPoint, y As Inventor.Point = q.RootPoint
         Return Math.Abs(Math.Abs(dot) - 1) <= Tol AndAlso
-               Math.Abs((y.X - x.X) * n.X + (y.Y - x.Y) * n.Y + (y.Z - x.Z) * n.Z) <= Tol
+               Math.Abs((y.X - x.X) * n.X + (y.Y - x.Y) * n.Y + (y.Z - x.Z) * n.Z) <= tolerance
     End Function
 
     Private Function NormalsCrossLengthSquared(ax As Double, ay As Double, az As Double,

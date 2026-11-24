@@ -4,7 +4,7 @@
 Внешние папки правил». Папка `ilogic/Confirmat`, добавленная для конфирматов,
 не заменяет эту настройку: для стяжек добавляется отдельная папка `ilogic/Stiajka`.
 
-Пять точек запуска:
+Шесть точек запуска:
 
 | Правило | Раскладка |
 | --- | --- |
@@ -13,6 +13,7 @@
 | `Stiajka_2_inch_fixKrai.iLogicVb` | Две стяжки с точным отступом от каждого края, без округления пролёта |
 | `Stiajka_3_inch_fixKrai.iLogicVb` | Три выбранные грани, средняя стяжка по сетке 32 мм от стороны третьей грани; четыре шканта |
 | `Stiajka_4_inch_fixKrai.iLogicVb` | Четыре стяжки: крайние промежутки округлены вниз к 32 мм, средний — остаток |
+| `Stiajka_6_inch_fixKrai.iLogicVb` | Шесть стяжек: четыре крайних промежутка округлены вниз к 32 мм, средний — остаток |
 
 Правила 1, 2 и 4 перенесены из `scripts/Создание присадки`: замените пути в
 браузере внешних правил или в своих правилах запуска. Запускайте `.iLogicVb`
@@ -31,7 +32,7 @@
 | `Modules/StiajkaSelection.vb` | Выбор пар граней, общее ребро, поиск соседнего тела |
 | `Modules/StiajkaSketches.vb` | Общие операции с эскизами и геометрией |
 | `Modules/StiajkaHoles.vb` | Пакеты отверстий, чашки и затрагиваемые тела |
-| `Modules/StiajkaDialog.vb` | Выбор отступа для вариантов 2 и 4 |
+| `Modules/StiajkaDialog.vb` | Выбор отступа для вариантов 2, 4 и 6 |
 | `Modules/Stiajka_1_Layout.vb` | Раскладка, размеры и проверки для одной стяжки |
 | `Modules/Stiajka_2_Layout.vb` | Раскладка, размеры и проверки для двух стяжек |
 | `Modules/Stiajka_2_fixKrai_Layout.vb` | Две стяжки с точными крайними отступами |
@@ -39,7 +40,7 @@
 | `Modules/Stiajka_3_Layout.vb` | Три стяжки, четыре шканта, три чашки и проверки пересечений |
 | `Modules/Stiajka_3_Dialog.vb` | Выбор пользовательского параметра точного отступа |
 | `Modules/Stiajka_3_Selection.vb` | Выбор троек граней и определение базовой стороны по третьей грани |
-| `Modules/Stiajka_4_Layout.vb` | Раскладка, размеры и проверки для четырёх стяжек |
+| `Modules/Stiajka_4_Layout.vb` | Общая раскладка, размеры и проверки для правил на четыре и шесть стяжек |
 
 Модули — части одного класса `ThisRule` (`Partial Public Class ThisRule`).
 Каждое главное правило подключает общие части и только свой файл раскладки;
@@ -64,6 +65,7 @@ python -X utf8 -B scripts/validate_ilogic_native.py --rule "ilogic/Stiajka/Stiaj
 python -X utf8 -B scripts/validate_ilogic_native.py --rule "ilogic/Stiajka/Stiajka_2_inch_fixKrai.iLogicVb" --smoke
 python -X utf8 -B scripts/validate_ilogic_native.py --rule "ilogic/Stiajka/Stiajka_3_inch_fixKrai.iLogicVb" --smoke
 python -X utf8 -B scripts/validate_ilogic_native.py --rule "ilogic/Stiajka/Stiajka_4_inch_fixKrai.iLogicVb" --smoke
+python -X utf8 -B scripts/validate_ilogic_native.py --rule "ilogic/Stiajka/Stiajka_6_inch_fixKrai.iLogicVb"
 ```
 
 Проверка компилирует все подключённые файлы против API установленного Inventor

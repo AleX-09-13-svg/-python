@@ -69,15 +69,15 @@ Public Class ThisRule
                     If Not Positive(value) Then Throw New Exception("Параметр должен быть положительным: " & name)
                     values(name) = value
                 Next
-                Dim origin() As Double = Nothing, direction() As Double = Nothing
-                Intersection(DirectCast(facade.Geometry, Plane), DirectCast(side.Geometry, Plane), origin, direction)
+                Dim origin() As Double = Nothing
+                Intersection(DirectCast(facade.Geometry, Plane), DirectCast(side.Geometry, Plane), origin)
                 LogStage("Подготовка", phase)
                 transaction = app.TransactionManager.StartTransaction(part, "07 Петли — iLogic")
                 app.ScreenUpdating = False
-                Dim first As Job = BuildFacade(facade, side, origin, direction, values(CupD), values(PilotD))
+                Dim first As Job = BuildFacade(facade, side, origin, values(CupD), values(PilotD))
                 Dim facadeDirection As PartFeatureExtentDirectionEnum = DrillingDirection(first.Sketch, facade)
                 LogStage("Эскиз фасада", phase)
-                Dim second As Job = BuildSide(side, first.Points, origin, direction, values(PilotD))
+                Dim second As Job = BuildSide(side, first.Points, origin, values(PilotD))
                 Dim sideDirection As PartFeatureExtentDirectionEnum = DrillingDirection(second.Sketch, side)
                 LogStage("Эскиз боковины", phase)
                 ' Подготовить центры до изменения топологии; координаты повторно не читаются.

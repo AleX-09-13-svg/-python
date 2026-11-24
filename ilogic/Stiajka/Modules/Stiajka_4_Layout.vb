@@ -43,7 +43,7 @@ Partial Public Class ThisRule
             g.AddCoincident(tie, axis)
             g.AddCoincident(dowel, axis)
         Next
-        For i As Integer = 0 To 1
+        For i As Integer = 0 To TieCount \ 2 - 1
             g.AddSymmetry(job.Outer(i), job.Outer(TieCount - 1 - i), symmetry)
             g.AddSymmetry(job.Inner(i), job.Inner(TieCount - 1 - i), symmetry)
             Dim t As Double = (positions(i) + dowels(i)) / 2
@@ -100,7 +100,7 @@ Partial Public Class ThisRule
                 job.Cups.Add(tie)
                 g.AddCoincident(tie, axis)
             Next
-            For i As Integer = 0 To 1
+            For i As Integer = 0 To TieCount \ 2 - 1
                 g.AddSymmetry(job.Cups(i), job.Cups(TieCount - 1 - i), anchor)
             Next
             ControlDimensions(dims, reference, job.Cups, P2(cx + nx * 4, cy + ny * 4),
@@ -121,12 +121,12 @@ Partial Public Class ThisRule
                                                          DimensionOrientationEnum.kAlignedDim, controlText, True)
         Dim name As String = AvailableName(comp.Parameters, "Long_edge_" & index.ToString(), "parameter")
         control.Parameter.Name = name
-        Dim span As Object = dims.AddTwoPointDistance(ties(3), ties(0), DimensionOrientationEnum.kAlignedDim, spanText, False)
+        Dim span As Object = dims.AddTwoPointDistance(ties(TieCount - 1), ties(0), DimensionOrientationEnum.kAlignedDim, spanText, False)
         span.Parameter.Name = AvailableName(comp.Parameters, "Расстояние_между_точками", "parameter")
         span.Parameter.Expression = name & " - " & edgeParam & " * 2"
         Dim pitch As Object = dims.AddTwoPointDistance(ties(1), ties(0), DimensionOrientationEnum.kAlignedDim, pitchText, False)
-        pitch.Parameter.Name = AvailableName(comp.Parameters, "Шаг_между_стяжками_4", "parameter")
-        pitch.Parameter.Expression = "floor((" & span.Parameter.Name & " / 3) / 32 mm) * 32 mm"
+        pitch.Parameter.Name = AvailableName(comp.Parameters, "Шаг_между_стяжками_" & TieCount.ToString(), "parameter")
+        pitch.Parameter.Expression = "floor((" & span.Parameter.Name & " / " & (TieCount - 1).ToString() & ") / 32 mm) * 32 mm"
     End Sub
 
     Private Function RequiredParameters(edgeParam As String) As List(Of String)
@@ -160,7 +160,7 @@ Partial Public Class ThisRule
             Throw New Exception("Проверьте длину и неотрицательный отступ от края.")
         End If
         If OuterPitch(span) <= 2 * StepCm + Tol Then
-            Throw New Exception("Недостаточно места для четырёх стяжек со шкантами: крайний шаг после округления к 32 мм должен быть больше 64 мм. Уменьшите отступ или выберите более длинное ребро.")
+            Throw New Exception("Недостаточно места для " & TieCount.ToString() & " стяжек со шкантами: крайний шаг после округления к 32 мм должен быть больше 64 мм. Уменьшите отступ или выберите более длинное ребро.")
         End If
         Return span
     End Function
@@ -168,11 +168,16 @@ Partial Public Class ThisRule
     Private Function TiePositions(length As Double, offset As Double) As Double()
         Dim span As Double = PointSpan(length, offset)
         Dim pitch As Double = OuterPitch(span)
-        Return New Double() {-span / 2, -span / 2 + pitch, span / 2 - pitch, span / 2}
+        Dim result(TieCount - 1) As Double
+        For i As Integer = 0 To TieCount \ 2 - 1
+            result(i) = -span / 2 + i * pitch
+            result(TieCount - 1 - i) = -result(i)
+        Next
+        Return result
     End Function
 
     Private Function OuterPitch(span As Double) As Double
-        Dim steps As Double = span / 3 / StepCm
+        Dim steps As Double = span / (TieCount - 1) / StepCm
         If Math.Abs(steps - Math.Round(steps)) <= 0.000000000001 Then steps = Math.Round(steps)
         Return Math.Floor(steps) * StepCm
     End Function

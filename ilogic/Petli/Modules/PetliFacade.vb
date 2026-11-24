@@ -9,7 +9,7 @@ Imports System.Text
 Imports System.Windows.Forms
 
 Partial Public Class ThisRule
-    Private Function BuildFacade(face As Face, side As Face, origin() As Double, direction() As Double,
+    Private Function BuildFacade(face As Face, side As Face, origin() As Double,
                                  diameter As Double, pilotDiameter As Double) As Job
         Dim sketch As PlanarSketch = comp.Sketches.Add(face)
         sketch.Name = AvailableName(comp.Sketches, "Petli", "sketch")
@@ -18,7 +18,7 @@ Partial Public Class ThisRule
         sketch.DeferUpdates = True
         Try
             Dim contour As List(Of Projection) = ProjectContour(sketch, face)
-            Dim f As Frame = SketchFrame(sketch, contour, origin, direction)
+            Dim f As Frame = SketchFrame(sketch, contour, origin)
             job.Layout = f
             Dim positions() As Double = FacadePositions(f, diameter, pilotDiameter)
             Dim projected As Integer = 0

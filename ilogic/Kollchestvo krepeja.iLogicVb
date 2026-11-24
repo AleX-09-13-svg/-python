@@ -1,0 +1,117 @@
+' Считает крепёж в активной детали по диаметру отверстий.
+' Стяжки: отверстия D15; конфирматы: отверстия D4.9.
+' Подсчитываются центры отверстий в операциях HoleFeature.
+AddReference "Autodesk.Inventor.Interop.dll"
+Imports Inventor
+Imports System
+Imports System.Collections.Generic
+Imports System.Globalization
+Imports System.Text
+Imports System.Windows.Forms
+
+Public Class ThisRule
+    Private Const DiameterToleranceMm As Double = 0.05
+
+    Public Sub Main()
+        Try
+            Dim activeDoc As Document = ThisApplication.ActiveDocument
+            Dim tieCount As Integer = 0
+            Dim confirmatCount As Integer = 0
+            Dim breakdown As New StringBuilder()
+
+            If TypeOf activeDoc Is PartDocument Then
+                Dim part As PartDocument = DirectCast(activeDoc, PartDocument)
+                tieCount = CountHolesByDiameter(part.ComponentDefinition, 15.0)
+                confirmatCount = CountHolesByDiameter(part.ComponentDefinition, 4.9)
+            ElseIf TypeOf activeDoc Is AssemblyDocument Then
+                Dim assembly As AssemblyDocument = DirectCast(activeDoc, AssemblyDocument)
+                CountAssembly(assembly.ComponentDefinition.Occurrences, tieCount, confirmatCount, breakdown, "")
+            Else
+                Throw New Exception("Откройте деталь .ipt или сборку .iam и запустите правило ещё раз.")
+            End If
+
+            Dim result As New StringBuilder()
+            result.AppendLine("Количество крепежа во всём открытом документе:")
+            result.AppendLine()
+            result.AppendLine("Количество стяжек по отверстию D15: " & tieCount.ToString())
+            result.Append("Количество конфирматов по отверстию D4.9: " & confirmatCount.ToString())
+            If breakdown.Length > 0 Then
+                result.AppendLine()
+                result.AppendLine()
+                result.AppendLine("Разбивка по компонентам:")
+                result.Append(breakdown.ToString())
+            End If
+            MessageBox.Show(result.ToString(), "Количество крепежа", MessageBoxButtons.OK, MessageBoxIcon.Information)
+        Catch ex As Exception
+            MessageBox.Show(ex.Message, "Количество крепежа — ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+
+    Private Sub CountAssembly(occurrences As ComponentOccurrences, ByRef tieCount As Integer, ByRef confirmatCount As Integer,
+                              breakdown As StringBuilder, parentPath As String)
+        For Each occurrence As ComponentOccurrence In occurrences
+            If occurrence.Suppressed Then Continue For
+
+            If occurrence.DefinitionDocumentType = DocumentTypeEnum.kPartDocumentObject Then
+                Dim partComp As PartComponentDefinition = TryCast(occurrence.Definition, PartComponentDefinition)
+                If partComp IsNot Nothing Then
+                    ' Перебираем вхождения, а не уникальные файлы: повторяющийся ящик считается каждый раз.
+                    Dim partTies As Integer = CountHolesByDiameter(partComp, 15.0)
+                    Dim partConfirmats As Integer = CountHolesByDiameter(partComp, 4.9)
+                    tieCount += partTies
+                    confirmatCount += partConfirmats
+                    If partTies > 0 OrElse partConfirmats > 0 Then
+                        breakdown.AppendLine(parentPath & occurrence.Name & ": D15=" & partTies.ToString() & ", D4.9=" & partConfirmats.ToString())
+                    End If
+                End If
+            ElseIf occurrence.DefinitionDocumentType = DocumentTypeEnum.kAssemblyDocumentObject Then
+                ' SubOccurrences сохраняет контекст конкретного экземпляра вложенной сборки.
+                CountAssembly(occurrence.SubOccurrences, tieCount, confirmatCount, breakdown, parentPath & occurrence.Name & "/")
+            End If
+        Next
+    End Sub
+
+    Private Function CountHolesByDiameter(comp As PartComponentDefinition, targetMm As Double) As Integer
+        ' Считаем цилиндрические поверхности всех твёрдых тел, а не только HoleFeature.
+        ' В многотельной детали отверстия могут прийти из производных тел или других операций.
+        Dim total As Integer = 0
+        For Each body As SurfaceBody In comp.SurfaceBodies
+            If Not body.IsSolid Then Continue For
+            ' Совпадающие оси в разных телах — отдельные отверстия. Дедупликация только внутри тела.
+            Dim bodyAxes As New HashSet(Of String)
+            For Each face As Face In body.Faces
+                Dim cylinder As Cylinder = TryCast(face.Geometry, Cylinder)
+                If cylinder Is Nothing Then Continue For
+
+                Dim diameterMm As Double = cylinder.Radius * 20.0 ' База Inventor для длины — сантиметры.
+                If Math.Abs(diameterMm - targetMm) > DiameterToleranceMm Then Continue For
+                bodyAxes.Add(CylinderAxisKey(cylinder))
+            Next
+            total += bodyAxes.Count
+        Next
+        Return total
+    End Function
+
+    Private Function CylinderAxisKey(cylinder As Cylinder) As String
+        Dim axis As UnitVector = cylinder.AxisVector
+        Dim dx As Double = axis.X, dy As Double = axis.Y, dz As Double = axis.Z
+
+        ' Ось цилиндра не имеет направления: нормализуем знак, чтобы совпадающие оси совпали в ключе.
+        If dx < -0.000001 OrElse (Math.Abs(dx) <= 0.000001 AndAlso dy < -0.000001) OrElse _
+           (Math.Abs(dx) <= 0.000001 AndAlso Math.Abs(dy) <= 0.000001 AndAlso dz < 0) Then
+            dx = -dx : dy = -dy : dz = -dz
+        End If
+
+        Dim p As Inventor.Point = cylinder.BasePoint
+        ' Момент p × d задаёт положение бесконечной оси независимо от BasePoint вдоль неё.
+        Dim mx As Double = p.Y * dz - p.Z * dy
+        Dim my As Double = p.Z * dx - p.X * dz
+        Dim mz As Double = p.X * dy - p.Y * dx
+        Return Quantize(dx, 0.00001) & ":" & Quantize(dy, 0.00001) & ":" & Quantize(dz, 0.00001) & ":" & _
+               Quantize(mx, 0.001) & ":" & Quantize(my, 0.001) & ":" & Quantize(mz, 0.001)
+    End Function
+
+    Private Function Quantize(value As Double, stepSize As Double) As String
+        Return Math.Round(value / stepSize).ToString(CultureInfo.InvariantCulture)
+    End Function
+End Class

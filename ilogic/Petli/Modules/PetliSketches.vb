@@ -18,9 +18,18 @@ Partial Public Class ThisRule
     End Function
 
     Private Function ProjectContour(sketch As PlanarSketch, face As Face) As List(Of Projection)
-        If face.Edges.Count <> 4 Then Throw New Exception("Нужна прямоугольная грань без вырезов.")
+        ' Контур грани может содержать внутренние петли от вырезов.
+        ' Для раскладки берём только внешний цикл ребер.
+        Dim outer As EdgeLoop = Nothing
+        For Each edgeLoop As EdgeLoop In face.EdgeLoops
+            If edgeLoop.IsOuterEdgeLoop Then
+                outer = edgeLoop
+                Exit For
+            End If
+        Next
+        If outer Is Nothing Then Throw New Exception("Не удалось определить внешний контур грани.")
         Dim result As New List(Of Projection)
-        For Each edge As Edge In face.Edges
+        For Each edge As Edge In outer.Edges
             If edge.GeometryType <> CurveTypeEnum.kLineCurve AndAlso edge.GeometryType <> CurveTypeEnum.kLineSegmentCurve Then Throw New Exception("Все рёбра должны быть прямыми.")
             Dim line As SketchLine = DirectCast(sketch.AddByProjectingEntity(edge), SketchLine)
             line.Construction = True
@@ -30,14 +39,21 @@ Partial Public Class ThisRule
         Return result
     End Function
 
-    Private Function SketchFrame(sketch As PlanarSketch, contour As List(Of Projection), origin() As Double, direction() As Double) As Frame
+    Private Function SketchFrame(sketch As PlanarSketch, contour As List(Of Projection), origin() As Double) As Frame
         Dim p As Point2d = sketch.ModelToSketchSpace(tg.CreatePoint(origin(0), origin(1), origin(2)))
-        Dim q As Point2d = sketch.ModelToSketchSpace(tg.CreatePoint(origin(0) + direction(0), origin(1) + direction(1), origin(2) + direction(2)))
         Dim segments As New List(Of XY())
         For Each item As Projection In contour
             segments.Add(New XY() {item.A, item.B})
         Next
-        Return RectangleFrame(segments, Coordinates(p), New XY(q.X - p.X, q.Y - p.Y))
+        Dim frame As Frame = OuterContourFrame(segments, Coordinates(p))
+        ' Для размеров используем полную сторону, даже если исходная сторона
+        ' разбита Inventor на несколько рёбер.
+        Dim fullLine As SketchLine = sketch.SketchLines.AddByTwoPoints(P2(frame.A), P2(frame.At(frame.Length, 0)))
+        fullLine.Construction = True
+        Dim first As SketchPoint = fullLine.StartSketchPoint, last As SketchPoint = fullLine.EndSketchPoint
+        contour(frame.Index) = New Projection With {.Line = fullLine, .First = first, .Last = last,
+            .A = Coordinates(first.Geometry), .B = Coordinates(last.Geometry)}
+        Return frame
     End Function
 
     Private Function Construction(lines As SketchLines, first As Object, last As Object) As SketchLine

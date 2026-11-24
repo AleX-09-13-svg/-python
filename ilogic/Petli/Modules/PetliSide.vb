@@ -9,7 +9,7 @@ Imports System.Text
 Imports System.Windows.Forms
 
 Partial Public Class ThisRule
-    Private Function BuildSide(face As Face, cups As List(Of SketchPoint), origin() As Double, direction() As Double, diameter As Double) As Job
+    Private Function BuildSide(face As Face, cups As List(Of SketchPoint), origin() As Double, diameter As Double) As Job
         Dim sketch As PlanarSketch = comp.Sketches.Add(face)
         sketch.Name = AvailableName(comp.Sketches, "Petli_Side", "sketch")
         Dim job As New Job With {.Sketch = sketch}
@@ -17,7 +17,7 @@ Partial Public Class ThisRule
         sketch.DeferUpdates = True
         Try
             Dim contour As List(Of Projection) = ProjectContour(sketch, face)
-            Dim f As Frame = SketchFrame(sketch, contour, origin, direction)
+            Dim f As Frame = SketchFrame(sketch, contour, origin)
             job.Layout = f
             Dim reference As SketchLine = contour(f.Index).Line
             Dim projections As New List(Of SketchPoint), centers As New List(Of XY)

@@ -1,4 +1,4 @@
-02 Конфирмат Native — 5 шт. 2026-11-07 00:22:34
+02 Конфирмат Native — 5 шт. 2026-11-21 23:28:06
 ОШИБКА: System.Exception: Выберите грани и ориентиры парами: грань присадки, затем торцевая кромка или грань со стороны отсчёта.
    в ThisRule.FiveConfirmatFaces() в C:\Users\desig\AppData\Local\Temp\iLogic Rules\ConfirmatReference.vb:строка 14
    в ThisRule.SelectedFaces() в C:\Users\desig\AppData\Local\Temp\iLogic Rules\ConfirmatSketches.vb:строка 14

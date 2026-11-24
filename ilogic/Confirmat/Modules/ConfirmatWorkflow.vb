@@ -40,9 +40,10 @@ Partial Public Class ThisRule
                 If chosen Is Nothing Then Return
                 Dim thickness As String = chosen(0), edgeOffset As String = If(count = 1, "", chosen(1))
                 ' Выбранные имена должны принадлежать пользовательской коллекции.
-                Dim thicknessUser As UserParameter = comp.Parameters.UserParameters.Item(thickness)
+                ' Find by enumeration: COM Item(name) may return E_INVALIDARG for a selected name.
+                Dim thicknessUser As UserParameter = FindUserParameter(thickness)
                 Dim offsetUser As UserParameter = Nothing
-                If count <> 1 Then offsetUser = comp.Parameters.UserParameters.Item(edgeOffset)
+                If count <> 1 Then offsetUser = FindUserParameter(edgeOffset)
                 If CDbl(comp.Parameters.Item(thickness).Value) <= 0 Then Throw New Exception("Толщина должна быть положительной.")
                 Dim edgeValue As Double = If(count = 1, 0.0, CDbl(comp.Parameters.Item(edgeOffset).Value))
                 If count <> 1 AndAlso edgeValue < 0 Then Throw New Exception("Отступ от кромки не должен быть отрицательным.")
@@ -98,4 +99,11 @@ Partial Public Class ThisRule
             End Try
         End Using
     End Sub
+
+    Private Function FindUserParameter(name As String) As UserParameter
+        For Each parameter As UserParameter In comp.Parameters.UserParameters
+            If String.Equals(parameter.Name, name, StringComparison.Ordinal) Then Return parameter
+        Next
+        Throw New Exception("В пользовательских параметрах детали не найден параметр «" & name & "». Обновите список и выберите существующий параметр.")
+    End Function
 End Class

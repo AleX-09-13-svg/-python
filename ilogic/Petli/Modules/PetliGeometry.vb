@@ -21,54 +21,60 @@ Partial Public Class ThisRule
         Return a.X * b.X + a.Y * b.Y
     End Function
 
-    Private Function RectangleFrame(segments As List(Of XY()), origin As XY, direction As XY) As Frame
-        If segments.Count <> 4 Then Throw New Exception("Нужна прямоугольная грань без вырезов.")
-        Dim norm As Double = Math.Sqrt(Dot(direction, direction))
-        If norm < Tol Then Throw New Exception("Не удалось определить направление ребра.")
-        Dim u As New XY(direction.X / norm, direction.Y / norm), n As New XY(-u.Y, u.X)
-        Dim corners As New List(Of XY)
+    Private Function OuterContourFrame(segments As List(Of XY()), referencePoint As XY) As Frame
+        If segments Is Nothing OrElse segments.Count = 0 Then Throw New Exception("У внешнего контура нет рёбер.")
+        ' Ось раскладки определяем по наружной границе, а не по пересечению
+        ' плоскостей фасада и боковины. Это допускает небольшой/любой поворот
+        ' внешнего контура относительно второй плоскости.
+        Dim axisLength As Double = 0, axis As XY = Nothing
         For Each segment As XY() In segments
-            If Distance(segment(0), segment(1)) < Tol Then Throw New Exception("Нулевое ребро.")
-            For Each p As XY In segment
-                Dim found As Boolean = False
-                For Each q As XY In corners
-                    If Distance(p, q) < Tol Then found = True
-                Next
-                If Not found Then corners.Add(p)
-            Next
-        Next
-        If corners.Count <> 4 Then Throw New Exception("Контур должен иметь четыре угла.")
-        Dim lo As Double = Double.PositiveInfinity, hi As Double = Double.NegativeInfinity
-        Dim left As Double = Double.PositiveInfinity, right As Double = Double.NegativeInfinity
-        Dim center As New XY(0, 0)
-        For Each p As XY In corners
-            lo = Math.Min(lo, Dot(p, u)) : hi = Math.Max(hi, Dot(p, u))
-            left = Math.Min(left, Dot(p, n)) : right = Math.Max(right, Dot(p, n))
-            center.X += p.X / 4 : center.Y += p.Y / 4
-        Next
-        If hi - lo < Tol OrElse right - left < Tol Then Throw New Exception("Вырожденный контур.")
-        For Each p As XY In corners
-            If Math.Min(Math.Abs(Dot(p, u) - lo), Math.Abs(Dot(p, u) - hi)) > Tol OrElse
-               Math.Min(Math.Abs(Dot(p, n) - left), Math.Abs(Dot(p, n) - right)) > Tol Then
-                Throw New Exception("Кромки должны быть параллельны и перпендикулярны второй плоскости.")
+            Dim dx As Double = segment(1).X - segment(0).X, dy As Double = segment(1).Y - segment(0).Y
+            Dim segmentMagnitude As Double = Math.Sqrt(dx * dx + dy * dy)
+            If segmentMagnitude < Tol Then Throw New Exception("Нулевое ребро во внешнем контуре.")
+            If segmentMagnitude > axisLength Then
+                axisLength = segmentMagnitude
+                axis = New XY(dx / segmentMagnitude, dy / segmentMagnitude)
             End If
         Next
+        If axisLength < Tol OrElse axis Is Nothing Then Throw New Exception("Не удалось определить направление внешнего контура.")
+        Dim u As XY = axis
+        Dim n As New XY(-u.Y, u.X)
+        Dim lo As Double = Double.PositiveInfinity
+        Dim hi As Double = Double.NegativeInfinity
+        Dim left As Double = Double.PositiveInfinity
+        Dim right As Double = Double.NegativeInfinity
+        For Each segment As XY() In segments
+            For Each p As XY In segment
+                Dim alongCoordinate As Double = Dot(p, u)
+                Dim acrossCoordinate As Double = Dot(p, n)
+                lo = Math.Min(lo, alongCoordinate) : hi = Math.Max(hi, alongCoordinate)
+                left = Math.Min(left, acrossCoordinate) : right = Math.Max(right, acrossCoordinate)
+            Next
+        Next
+        If hi - lo < Tol OrElse right - left < Tol Then Throw New Exception("Вырожденный контур.")
+        Dim center As New XY(u.X * ((lo + hi) / 2) + n.X * ((left + right) / 2),
+                             u.Y * ((lo + hi) / 2) + n.Y * ((left + right) / 2))
         Dim candidates As New List(Of KeyValuePair(Of Double, Integer))
         For i As Integer = 0 To segments.Count - 1
             Dim a As XY = segments(i)(0), b As XY = segments(i)(1)
-            Dim da As Double = Dot(a, u) - Dot(b, u), db As Double = Dot(a, n) - Dot(b, n)
-            If Math.Abs(da) > Tol AndAlso Math.Abs(db) > Tol Then Throw New Exception("Грань должна быть прямоугольной.")
-            If Math.Abs(db) < Tol Then candidates.Add(New KeyValuePair(Of Double, Integer)(Math.Abs(Dot(a, n) - Dot(origin, n)), i))
+            Dim db As Double = Dot(a, n) - Dot(b, n)
+            If Math.Abs(db) < Tol Then
+                Dim level As Double = Dot(a, n)
+                candidates.Add(New KeyValuePair(Of Double, Integer)(Math.Abs(level - Dot(referencePoint, n)), i))
+            End If
         Next
         candidates.Sort(Function(a, b) a.Key.CompareTo(b.Key))
-        If candidates.Count <> 2 OrElse Math.Abs(candidates(0).Key - candidates(1).Key) < Tol Then Throw New Exception("Неоднозначная сторона размещения петель.")
+        If candidates.Count = 0 Then Throw New Exception("Не удалось найти наружную сторону для размещения петель.")
         Dim index As Integer = candidates(0).Value
         Dim start As XY = segments(index)(0), finish As XY = segments(index)(1)
-        Dim length As Double = Distance(start, finish)
-        Dim along As New XY((finish.X - start.X) / length, (finish.Y - start.Y) / length)
-        Dim inward As New XY(-along.Y, along.X)
+        Dim forward As Boolean = Dot(New XY(finish.X - start.X, finish.Y - start.Y), u) > 0
+        Dim frameLength As Double = hi - lo
+        Dim frameDirection As XY = If(forward, u, New XY(-u.X, -u.Y))
+        start = If(forward, New XY(u.X * lo + n.X * Dot(start, n), u.Y * lo + n.Y * Dot(start, n)),
+                            New XY(u.X * hi + n.X * Dot(start, n), u.Y * hi + n.Y * Dot(start, n)))
+        Dim inward As New XY(-frameDirection.Y, frameDirection.X)
         If Dot(New XY(center.X - start.X, center.Y - start.Y), inward) < 0 Then inward = New XY(-inward.X, -inward.Y)
-        Return New Frame With {.Index = index, .A = start, .U = along, .N = inward, .Length = length, .Width = right - left}
+        Return New Frame With {.Index = index, .A = start, .U = frameDirection, .N = inward, .Length = frameLength, .Width = right - left}
     End Function
 
     Private Function Cross(a() As Double, b() As Double) As Double()
@@ -79,11 +85,11 @@ Partial Public Class ThisRule
         Return a(0) * b(0) + a(1) * b(1) + a(2) * b(2)
     End Function
 
-    Private Sub Intersection(first As Plane, second As Plane, ByRef origin() As Double, ByRef direction() As Double)
+    Private Sub Intersection(first As Plane, second As Plane, ByRef origin() As Double)
         Dim n1 As UnitVector = first.Normal, n2 As UnitVector = second.Normal
         Dim a() As Double = {n1.X, n1.Y, n1.Z}, b() As Double = {n2.X, n2.Y, n2.Z}
         If Math.Abs(Dot3(a, b)) > Tol Then Throw New Exception("Фасад и боковина должны быть перпендикулярны.")
-        direction = Cross(a, b)
+        Dim direction() As Double = Cross(a, b)
         Dim norm As Double = Dot3(direction, direction)
         If norm < 0.00000001 Then Throw New Exception("Плоскости параллельны.")
         Dim p1 As Inventor.Point = first.RootPoint, p2 As Inventor.Point = second.RootPoint
